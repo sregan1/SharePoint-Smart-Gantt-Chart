@@ -1,0 +1,32 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/package-solution.schema.json",
+  "solution": {
+    "name": "SharePoint Smart Gantt Chart",
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "version": "1.0.0.0",
+    "includeClientSideAssets": true,
+    "skipFeatureDeployment": true,
+    "isDomainIsolated": false,
+    "developer": {
+      "name": "Sean Regan, Vivity Consulting",
+      "websiteUrl": "",
+      "privacyUrl": "",
+      "termsOfUseUrl": "",
+      "mpnId": ""
+    },
+    "metadata": {
+      "shortDescription": {
+        "default": "SharePoint Smart Gantt Chart — project management with Gantt, List, and Kanban views"
+      },
+      "longDescription": {
+        "default": "A powerful project management web part featuring Gantt chart, list, and Kanban views backed by SharePoint lists."
+      },
+      "screenshotPaths": [],
+      "videoUrl": "",
+      "categories": []
+    },
+  },
+  "paths": {
+    "zippedPackage": "solution/sharepoint-smart-gantt-chart.sppkg"
+  }
+}

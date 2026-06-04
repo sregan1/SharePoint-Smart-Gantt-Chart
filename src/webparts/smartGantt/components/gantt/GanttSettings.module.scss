@@ -1,0 +1,145 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 4px 0;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sectionTitle {
+  font-size: 11px;
+  font-weight: 700;
+  color: #605E5C;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #EDEBE9;
+}
+
+/* Option chips (color-by, bar style, week label) */
+.chipGroup {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border: 1px solid #C8C6C4;
+  border-radius: 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #605E5C;
+  background: #fff;
+  cursor: pointer;
+  transition: all 0.12s;
+
+  &:hover { border-color: #0078D4; color: #0078D4; }
+
+  &.selected {
+    background: #0078D4;
+    border-color: #0078D4;
+    color: #fff;
+    font-weight: 600;
+  }
+}
+
+/* Header theme swatches */
+.themeGrid {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.themeSwatch {
+  width: 44px;
+  height: 32px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.12s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.85);
+
+  &.selected {
+    border-color: #323130;
+    outline: 2px solid #323130;
+    outline-offset: 2px;
+  }
+
+  &.light {
+    color: #323130;
+    border-color: #C8C6C4;
+  }
+}
+
+/* Row height */
+.heightGroup {
+  display: flex;
+  gap: 8px;
+}
+
+.heightBtn {
+  flex: 1;
+  padding: 8px 6px;
+  border: 1px solid #C8C6C4;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 11px;
+  color: #605E5C;
+  text-align: center;
+  transition: all 0.12s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+
+  &:hover { border-color: #0078D4; color: #0078D4; }
+
+  &.selected {
+    border-color: #0078D4;
+    background: #EFF6FC;
+    color: #0078D4;
+    font-weight: 600;
+  }
+}
+
+.heightPreview {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  align-items: center;
+}
+
+.heightBar {
+  width: 28px;
+  background: #0078D4;
+  border-radius: 2px;
+  opacity: 0.6;
+}
+
+/* Toggle rows */
+.toggleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0;
+}
+
+.toggleLabel {
+  font-size: 13px;
+  color: #323130;
+}

@@ -1,0 +1,20 @@
+{
+  "@microsoft/generator-sharepoint": {
+    "version": "1.20.2",
+    "libraryName": "sharepoint-smart-gantt-chart",
+    "libraryId": "b2e6b5f4-3c7a-4d8e-9f1a-2c5d7e8b9a0c",
+    "environment": "spo",
+    "packageManager": "npm",
+    "solutionName": "sharepoint-smart-gantt-chart",
+    "solutionShortDescription": "SharePoint Smart Gantt Chart web part",
+    "skipFeatureDeployment": true,
+    "isDomainIsolated": false,
+    "isCreatingSolution": true,
+    "nodeVersion": "18.20.8",
+    "sdksVersions": {
+      "@microsoft/microsoft-graph-client": "3.0.2",
+      "microsoft-teams-js": "2.12.0"
+    },
+    "componentType": "webpart"
+  }
+}

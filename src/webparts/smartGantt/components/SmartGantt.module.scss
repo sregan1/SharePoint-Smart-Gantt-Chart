@@ -1,0 +1,81 @@
+.smartGantt {
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #ffffff;
+  border: 1px solid #EDEBE9;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 120px);
+  min-height: 500px;
+  color: #323130;
+}
+
+.loadingContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 16px;
+  color: #605E5C;
+}
+
+.errorContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 12px;
+  padding: 40px;
+  text-align: center;
+}
+
+.errorTitle {
+  font-size: 18px;
+  font-weight: 600;
+  color: #D13438;
+}
+
+.errorMessage {
+  color: #605E5C;
+  max-width: 400px;
+}
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 16px;
+  padding: 60px 40px;
+  text-align: center;
+}
+
+.emptyIcon {
+  font-size: 64px;
+  opacity: 0.3;
+  color: #0078D4;
+}
+
+.emptyTitle {
+  font-size: 22px;
+  font-weight: 600;
+  color: #323130;
+}
+
+.emptySubtitle {
+  font-size: 14px;
+  color: #605E5C;
+  max-width: 400px;
+  line-height: 1.6;
+}
+
+.viewContainer {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}

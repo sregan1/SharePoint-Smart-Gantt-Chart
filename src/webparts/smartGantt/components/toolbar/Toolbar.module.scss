@@ -1,0 +1,279 @@
+.toolbar {
+  display: flex;
+  flex-direction: column;
+  background: #F3F2F1;
+  border-bottom: 2px solid #EDEBE9;
+  font-family: 'Segoe UI', sans-serif;
+}
+
+/* ── Row 1: project context + task actions ─────────────────────────────────── */
+.row1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-bottom: 1px solid #EDEBE9;
+  min-height: 48px;
+  flex-wrap: nowrap;
+}
+
+.row1Left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.row1Right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* ── Row 2: view controls ──────────────────────────────────────────────────── */
+.row2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 16px;
+  min-height: 40px;
+}
+
+.row2Left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.row2Right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* ── Shared divider ──────────────────────────────────────────────────────────  */
+.divider {
+  width: 1px;
+  height: 22px;
+  background: #C8C6C4;
+  margin: 0 2px;
+  flex-shrink: 0;
+}
+
+/* ── Project selector ────────────────────────────────────────────────────────  */
+.projectSelector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #ffffff;
+  border: 1px solid #C8C6C4;
+  border-radius: 4px;
+  padding: 5px 10px;
+  cursor: pointer;
+  min-width: 160px;
+  max-width: 260px;
+  transition: border-color 0.15s;
+  flex-shrink: 1;
+  overflow: hidden;
+
+  &:hover { border-color: #0078D4; }
+}
+
+.projectDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.projectName {
+  font-size: 14px;
+  font-weight: 600;
+  color: #323130;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chevron {
+  color: #605E5C;
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────────────  */
+.actionBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+
+  &.primary {
+    background: #0078D4;
+    color: #ffffff;
+    &:hover { background: #106EBE; }
+  }
+
+  &.secondary {
+    background: #ffffff;
+    color: #323130;
+    border: 1px solid #C8C6C4;
+    &:hover { background: #F3F2F1; border-color: #8A8886; }
+  }
+}
+
+.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: #ffffff;
+  border: 1px solid #C8C6C4;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #605E5C;
+  font-size: 15px;
+  transition: all 0.1s;
+  flex-shrink: 0;
+
+  &:hover { background: #F3F2F1; border-color: #8A8886; color: #323130; }
+}
+
+/* ── View switcher ───────────────────────────────────────────────────────────  */
+.viewSwitcher {
+  display: flex;
+  background: #ffffff;
+  border: 1px solid #C8C6C4;
+  border-radius: 4px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.viewBtn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 11px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #605E5C;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+  white-space: nowrap;
+
+  &:not(:last-child) { border-right: 1px solid #C8C6C4; }
+  &:hover { background: #F3F2F1; color: #323130; }
+  &.active { background: #0078D4; color: #ffffff; }
+}
+
+/* ── Zoom buttons ────────────────────────────────────────────────────────────  */
+.zoomGroup {
+  display: flex;
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #C8C6C4;
+  border-radius: 4px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.zoomBtn {
+  padding: 4px 9px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #605E5C;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.1s;
+  white-space: nowrap;
+
+  &:not(:last-child) { border-right: 1px solid #EDEBE9; }
+  &:hover { background: #F3F2F1; color: #323130; }
+  &.active { background: #EFF6FC; color: #0078D4; font-weight: 700; }
+}
+
+.todayBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #605E5C;
+  background: #ffffff;
+  border: 1px solid #C8C6C4;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.1s;
+  flex-shrink: 0;
+
+  &:hover { border-color: #D13438; color: #D13438; }
+}
+
+.settingsBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #605E5C;
+  background: #ffffff;
+  border: 1px solid #C8C6C4;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.1s;
+  flex-shrink: 0;
+
+  &:hover { border-color: #0078D4; color: #0078D4; }
+  &.active { background: #EFF6FC; border-color: #0078D4; color: #0078D4; }
+}
+
+/* ── Callouts / dropdowns ────────────────────────────────────────────────────  */
+.calloutItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #323130;
+  transition: background 0.1s;
+  white-space: nowrap;
+
+  &:hover { background: #F3F2F1; }
+  &.selected { background: #EFF6FC; }
+  &.danger { color: #D13438; }
+  &.danger:hover { background: #FDF3F4; }
+}
+
+.calloutDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.calloutSeparator {
+  height: 1px;
+  background: #EDEBE9;
+  margin: 4px 0;
+}

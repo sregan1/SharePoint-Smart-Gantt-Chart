@@ -1,0 +1,283 @@
+.listView {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.tableWrapper {
+  flex: 1;
+  overflow: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  color: #323130;
+}
+
+.thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #F3F2F1;
+
+  th {
+    padding: 10px 12px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    color: #605E5C;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 2px solid #EDEBE9;
+    white-space: nowrap;
+    user-select: none;
+    cursor: pointer;
+    transition: background 0.1s;
+
+    &:hover {
+      background: #EDEBE9;
+    }
+
+    &.sorted {
+      color: #0078D4;
+    }
+
+    .sortArrow {
+      margin-left: 4px;
+      font-size: 10px;
+    }
+  }
+}
+
+.tbody {
+  tr {
+    border-bottom: 1px solid #F3F2F1;
+    transition: background 0.1s;
+
+    &:hover {
+      background: #F8F7F6;
+
+      .rowActions {
+        opacity: 1;
+      }
+    }
+
+    &.phaseGroupRow {
+      background: #F3F2F1;
+
+      &:hover {
+        background: #EDEBE9;
+      }
+    }
+  }
+
+  td {
+    padding: 8px 12px;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+}
+
+.taskNameCell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 200px;
+  max-width: 380px;
+}
+
+.statusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.milestoneIcon {
+  font-size: 11px;
+}
+
+.taskName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.subtaskIndent {
+  width: 20px;
+  flex-shrink: 0;
+}
+
+.phaseGroupCell {
+  font-size: 12px;
+  font-weight: 600;
+  color: #605E5C;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.priorityBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  border: 1px solid currentColor;
+}
+
+.progressBar {
+  width: 80px;
+  height: 6px;
+  background: #EDEBE9;
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+
+  .progressFill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s;
+  }
+}
+
+.progressLabel {
+  font-size: 11px;
+  color: #605E5C;
+  min-width: 30px;
+  text-align: right;
+}
+
+.progressCell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dateCell {
+  font-size: 12px;
+  color: #323130;
+  white-space: nowrap;
+}
+
+.overdue {
+  color: #D13438;
+  font-weight: 600;
+}
+
+.assigneeCell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.avatarCircle {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.rowActions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+.rowActionBtn {
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: transparent;
+  border-radius: 3px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: #605E5C;
+  padding: 0;
+  transition: all 0.1s;
+
+  &:hover {
+    background: #EDEBE9;
+    color: #323130;
+  }
+
+  &.deleteBtn:hover {
+    background: #FDF3F4;
+    color: #D13438;
+  }
+}
+
+.addRowBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  font-size: 13px;
+  color: #0078D4;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  border-bottom: 1px solid #F3F2F1;
+  transition: background 0.1s;
+
+  &:hover {
+    background: #EFF6FC;
+  }
+}
+
+.inlineSelect {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 2px 4px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.1s;
+  outline: none;
+  -webkit-appearance: none;
+
+  &:hover, &:focus {
+    border-color: #C8C6C4;
+    background: #fff;
+  }
+}
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 12px;
+  padding: 60px;
+  text-align: center;
+  color: #605E5C;
+}

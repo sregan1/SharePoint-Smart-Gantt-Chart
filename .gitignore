@@ -1,0 +1,27 @@
+# SPFx build output
+node_modules/
+lib/
+dist/
+temp/
+release/
+sharepoint/
+.heft/
+*.sppkg
+
+# Generated TypeScript declaration stubs (produced by the SPFx SCSS compiler)
+*.module.scss.ts
+
+# Local developer config — contains your tenant URL; copy and fill in manually
+config/serve.json
+
+# Office temp/lock files
+~$*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log
+.env
+.env.*
+.vscode/settings.json
+.npmignore

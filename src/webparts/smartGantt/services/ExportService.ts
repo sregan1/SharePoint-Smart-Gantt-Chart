@@ -5,7 +5,7 @@ import {
   isWeekend, startOfMonth, startOfWeek, addWeeks, addMonths, max, min, getISOWeek,
 } from 'date-fns';
 import {
-  IProject, ITask, IGanttDisplaySettings, STATUS_COLORS, PRIORITY_COLORS,
+  IProject, ITask, IProjectTaskStats, IGanttDisplaySettings, STATUS_COLORS, PRIORITY_COLORS,
   HEADER_THEME_COLORS, phaseColor,
 } from '../models';
 
@@ -788,4 +788,172 @@ export async function exportToPowerPoint(
   }
 
   await pptx.writeFile({ fileName: `${project.title} - Project Report.pptx` });
+}
+
+// ─── Portfolio exports ────────────────────────────────────────────────────────
+
+function portfolioHealthLabel(h: string): string {
+  const map: Record<string, string> = { complete: 'Done', 'on-track': 'On Track', 'at-risk': 'At Risk', overdue: 'Overdue' };
+  return map[h] ?? h;
+}
+
+function portfolioHealthHex(h: string): string {
+  const map: Record<string, string> = { complete: '107C10', 'on-track': '0078D4', 'at-risk': 'CA5010', overdue: 'D13438' };
+  return map[h] ?? '323130';
+}
+
+export function exportPortfolioToExcel(
+  projects: IProject[],
+  statsMap: Map<number, IProjectTaskStats> | null
+): void {
+  const fmt = (d: string): string => (d ? format(new Date(d), 'MM/dd/yyyy') : '');
+
+  const rows = projects.map(p => {
+    const s = statsMap?.get(p.id);
+    return {
+      'Project':     p.title,
+      'Status':      p.status,
+      'Health':      s ? portfolioHealthLabel(s.health) : '—',
+      'Total Tasks': s?.totalTasks ?? '—',
+      'Completed':   s?.completedCount ?? '—',
+      'In Progress': s?.inProgressCount ?? '—',
+      'At Risk':     s?.atRiskCount ?? '—',
+      'Overdue':     s?.overdueCount ?? '—',
+      '% Done':      s != null ? `${s.overallPct}%` : '—',
+      'Start':       fmt(p.startDate || s?.earliestStart || ''),
+      'Due':         fmt(p.dueDate   || s?.latestDue    || ''),
+      'Description': p.description,
+    };
+  });
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const headers = Object.keys(rows[0] ?? {});
+  ws['!cols'] = headers.map(h => ({
+    wch: Math.max(h.length + 2, ...rows.map(r => String((r as Record<string, unknown>)[h] ?? '').length + 1)),
+  }));
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Portfolio');
+  XLSX.writeFile(wb, 'Portfolio Summary.xlsx');
+}
+
+export async function exportPortfolioToPowerPoint(
+  projects: IProject[],
+  statsMap: Map<number, IProjectTaskStats> | null
+): Promise<void> {
+  const today = new Date();
+  const fmt = (d: string): string => (d ? format(new Date(d), 'MMM d, yyyy') : '—');
+  const ACCENT = '0078D4';
+
+  // Aggregate health counts
+  const healthCounts = { 'on-track': 0, 'at-risk': 0, overdue: 0, complete: 0 };
+  if (statsMap) {
+    statsMap.forEach(s => { if (s.health in healthCounts) healthCounts[s.health as keyof typeof healthCounts]++; });
+  }
+
+  const pptx = new PptxGenJS();
+  pptx.layout = 'LAYOUT_WIDE';
+
+  // ── Slide 1: Cover ─────────────────────────────────────────────────────────
+  const cover = pptx.addSlide();
+  cover.background = { color: ACCENT };
+
+  cover.addShape(pptx.ShapeType.rect, {
+    x: 0, y: 4.6, w: 13.33, h: 2.9,
+    fill: { color: 'FFFFFF' }, line: { color: 'FFFFFF', width: 0 },
+  });
+
+  cover.addText('PORTFOLIO REPORT', {
+    x: 0.65, y: 0.9, w: 12, h: 0.45,
+    fontSize: 11, color: 'FFFFFF', charSpacing: 3, transparency: 30,
+  });
+  cover.addText('Portfolio Overview', {
+    x: 0.65, y: 1.35, w: 12, h: 1.4,
+    fontSize: 42, color: 'FFFFFF', bold: true,
+  });
+  cover.addText(`${projects.length} projects`, {
+    x: 0.65, y: 3.0, w: 6, h: 0.45,
+    fontSize: 16, color: 'FFFFFF', transparency: 15,
+  });
+
+  // Health summary chips
+  const summaryParts: string[] = [];
+  if (healthCounts['on-track'])  summaryParts.push(`${healthCounts['on-track']} On Track`);
+  if (healthCounts['at-risk'])   summaryParts.push(`${healthCounts['at-risk']} At Risk`);
+  if (healthCounts.overdue)      summaryParts.push(`${healthCounts.overdue} Overdue`);
+  if (summaryParts.length) {
+    cover.addText(summaryParts.join('  ·  '), {
+      x: 0.65, y: 3.5, w: 12, h: 0.4,
+      fontSize: 14, color: 'FFFFFF', transparency: 30,
+    });
+  }
+  cover.addText(`Generated ${format(today, 'MMMM d, yyyy')}`, {
+    x: 0, y: 7.15, w: 13.15, h: 0.3,
+    fontSize: 10, color: '605E5C', align: 'right',
+  });
+
+  // ── Slide 2: Project Summary Table ─────────────────────────────────────────
+  const table = pptx.addSlide();
+  table.background = { color: 'FFFFFF' };
+
+  table.addShape(pptx.ShapeType.rect, {
+    x: 0, y: 0, w: 13.33, h: 0.75,
+    fill: { color: ACCENT }, line: { color: ACCENT, width: 0 },
+  });
+  table.addText('Project Summary', {
+    x: 0.4, y: 0, w: 9, h: 0.75,
+    fontSize: 20, color: 'FFFFFF', bold: true, valign: 'middle',
+  });
+  table.addText(`${projects.length} Projects  ·  ${format(today, 'MMM d, yyyy')}`, {
+    x: 0, y: 0, w: 13.0, h: 0.75,
+    fontSize: 12, color: 'FFFFFF', align: 'right', valign: 'middle', transparency: 35,
+  });
+
+  const COL_W = [3.0, 0.9, 1.0, 0.75, 0.75, 0.75, 0.75, 0.75, 0.75, 1.35];
+  const HDR   = ['Project', 'Status', 'Health', 'Total', 'Done', 'Active', 'At Risk', 'Overdue', '% Done', 'Due Date'];
+
+  const hdrRow = HDR.map((h, _i) => ({
+    text: h,
+    options: {
+      bold: true, fontSize: 10, color: 'FFFFFF', align: 'center' as const,
+      fill: { color: ACCENT },
+      border: [{ type: 'solid' as const, pt: 1, color: '0065B3' }],
+      colspan: 1,
+    },
+  }));
+
+  const dataRows = projects.map(p => {
+    const s = statsMap?.get(p.id);
+    const hLabel = s ? portfolioHealthLabel(s.health) : '—';
+    const hHex   = s ? portfolioHealthHex(s.health)   : '323130';
+    const rowBg  = 'FFFFFF';
+
+    const cell = (txt: string, opts: object = {}): object => ({
+      text: txt,
+      options: { fontSize: 10, color: '323130', align: 'center' as const, fill: { color: rowBg }, border: [{ type: 'solid' as const, pt: 1, color: 'EDEBE9' }], ...opts },
+    });
+
+    return [
+      cell(p.title, { align: 'left' as const, bold: true }),
+      cell(p.status),
+      cell(hLabel, { color: hHex, bold: true }),
+      cell(s ? String(s.totalTasks)    : '—'),
+      cell(s ? String(s.completedCount): '—', { color: '107C10' }),
+      cell(s ? String(s.inProgressCount):'—', { color: '0078D4' }),
+      cell(s ? String(s.atRiskCount)   : '—', { color: 'CA5010' }),
+      cell(s ? String(s.overdueCount)  : '—', { color: 'D13438' }),
+      cell(s ? `${s.overallPct}%`      : '—'),
+      cell(fmt(p.dueDate || s?.latestDue || '')),
+    ];
+  });
+
+  table.addTable([hdrRow, ...dataRows] as Parameters<typeof table.addTable>[0], {
+    x: 0.15, y: 0.9,
+    w: 13.0,
+    colW: COL_W,
+    rowH: Math.min(0.42, (7.5 - 1.1) / (projects.length + 1)),
+    fontSize: 10,
+  });
+
+  await pptx.writeFile({ fileName: 'Portfolio Report.pptx' });
 }

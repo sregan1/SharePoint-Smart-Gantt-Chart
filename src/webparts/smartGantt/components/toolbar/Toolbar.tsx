@@ -17,10 +17,17 @@ interface IToolbarProps {
   onAddProject: () => void;
   onEditProject: () => void;
   onDeleteProject: () => void;
+  onArchiveProject: () => void;
+  onUnarchiveProject: () => void;
+  showArchivedProjects: boolean;
+  hasArchivedProjects: boolean;
+  onToggleShowArchived: () => void;
   onImport: () => void;
   onExportExcel: () => void;
   onExportImage: () => void;
   onExportPowerPoint: () => void;
+  onPortfolioExportExcel: () => void;
+  onPortfolioExportPowerPoint: () => void;
   onOpenSettings: () => void;
   showSettings: boolean;
 }
@@ -38,10 +45,17 @@ export const Toolbar: React.FC<IToolbarProps> = ({
   onAddProject,
   onEditProject,
   onDeleteProject,
+  onArchiveProject,
+  onUnarchiveProject,
+  showArchivedProjects,
+  hasArchivedProjects,
+  onToggleShowArchived,
   onImport,
   onExportExcel,
   onExportImage,
   onExportPowerPoint,
+  onPortfolioExportExcel,
+  onPortfolioExportPowerPoint,
   onOpenSettings,
   showSettings,
 }) => {
@@ -76,11 +90,13 @@ export const Toolbar: React.FC<IToolbarProps> = ({
             onClick={() => setProjectCalloutVisible(v => !v)}
             role="button"
           >
-            {selectedProject && (
+            {viewMode === 'portfolio' ? (
+              <span style={{ fontSize: 14, marginRight: 2 }}>⊞</span>
+            ) : selectedProject ? (
               <div className={styles.projectDot} style={{ background: selectedProject.color }} />
-            )}
+            ) : null}
             <span className={styles.projectName}>
-              {selectedProject ? selectedProject.title : 'Select a Project'}
+              {viewMode === 'portfolio' ? 'Portfolio' : selectedProject ? selectedProject.title : 'Select a Project'}
             </span>
             <span className={styles.chevron}>▾</span>
           </div>
@@ -93,21 +109,45 @@ export const Toolbar: React.FC<IToolbarProps> = ({
               calloutMinWidth={260}
             >
               <div style={{ paddingTop: 4, paddingBottom: 4 }}>
+                {/* Portfolio — cross-project overview */}
+                <div
+                  className={`${styles.calloutItem} ${viewMode === 'portfolio' ? styles.selected : ''}`}
+                  onClick={() => { onViewChange('portfolio'); setProjectCalloutVisible(false); }}
+                >
+                  <span style={{ fontSize: 14, marginRight: 6, flexShrink: 0 }}>⊞</span>
+                  <span style={{ flex: 1 }}>Portfolio</span>
+                  <span style={{ fontSize: 11, color: '#605E5C' }}>All projects</span>
+                </div>
+                <div className={styles.calloutSeparator} />
                 {projects.map(p => (
                   <div
                     key={p.id}
-                    className={`${styles.calloutItem} ${selectedProject?.id === p.id ? styles.selected : ''}`}
+                    className={`${styles.calloutItem} ${viewMode !== 'portfolio' && selectedProject?.id === p.id ? styles.selected : ''}`}
+                    style={p.isArchived ? { opacity: 0.55 } : undefined}
                     onClick={() => { onSelectProject(p); setProjectCalloutVisible(false); }}
                   >
                     <div className={styles.calloutDot} style={{ background: p.color }} />
                     <span style={{ flex: 1 }}>{p.title}</span>
-                    <span style={{ fontSize: 11, color: '#605E5C' }}>{p.status}</span>
+                    {p.isArchived
+                      ? <span style={{ fontSize: 10, color: '#605E5C', background: '#F3F2F1', border: '1px solid #EDEBE9', borderRadius: 3, padding: '1px 5px' }}>Archived</span>
+                      : <span style={{ fontSize: 11, color: '#605E5C' }}>{p.status}</span>
+                    }
                   </div>
                 ))}
                 {projects.length === 0 && (
                   <div style={{ padding: '10px 16px', color: '#605E5C', fontSize: 13 }}>No projects yet</div>
                 )}
                 <div className={styles.calloutSeparator} />
+                {hasArchivedProjects && (
+                  <div
+                    className={styles.calloutItem}
+                    onClick={() => { onToggleShowArchived(); }}
+                    style={{ color: '#605E5C' }}
+                  >
+                    <span style={{ marginRight: 6, fontSize: 13 }}>{showArchivedProjects ? '☑' : '☐'}</span>
+                    <span>Show archived projects</span>
+                  </div>
+                )}
                 <div className={styles.calloutItem} onClick={() => { setProjectCalloutVisible(false); onAddProject(); }}>
                   + New Project
                 </div>
@@ -117,7 +157,7 @@ export const Toolbar: React.FC<IToolbarProps> = ({
 
           <div className={styles.divider} />
 
-          {selectedProject ? (
+          {selectedProject && viewMode !== 'portfolio' ? (
             <>
               <button className={`${styles.actionBtn} ${styles.primary}`} onClick={onAddTask}>
                 + Add Task
@@ -126,26 +166,59 @@ export const Toolbar: React.FC<IToolbarProps> = ({
                 Edit Project
               </button>
             </>
-          ) : (
+          ) : viewMode !== 'portfolio' ? (
             <button className={`${styles.actionBtn} ${styles.primary}`} onClick={onAddProject}>
               + New Project
             </button>
-          )}
+          ) : null}
         </div>
 
         <div className={styles.row1Right}>
-          <button
-            className={`${styles.settingsBtn} ${showSettings ? styles.active : ''}`}
-            onClick={onOpenSettings}
-            title="Options"
-          >
-            ⚙ Options
-          </button>
+          {selectedProject && viewMode !== 'portfolio' && (
+            <button
+              className={`${styles.settingsBtn} ${showSettings ? styles.active : ''}`}
+              onClick={onOpenSettings}
+              title="Options"
+            >
+              ⚙ Options
+            </button>
+          )}
+
+          {viewMode === 'portfolio' && (
+            <>
+              <div ref={moreBtnRef}>
+                <button
+                  className={styles.iconBtn}
+                  onClick={() => setMoreCalloutVisible(v => !v)}
+                  title="More options"
+                >
+                  ⋯
+                </button>
+              </div>
+              {moreCalloutVisible && (
+                <Callout
+                  target={moreBtnRef}
+                  onDismiss={() => setMoreCalloutVisible(false)}
+                  directionalHint={DirectionalHint.bottomRightEdge}
+                  calloutMinWidth={210}
+                >
+                  <div style={{ paddingTop: 4, paddingBottom: 4 }}>
+                    <div className={styles.calloutItem} onClick={() => { setMoreCalloutVisible(false); onPortfolioExportExcel(); }}>
+                      📊&ensp;Export to Excel
+                    </div>
+                    <div className={styles.calloutItem} onClick={() => { setMoreCalloutVisible(false); onPortfolioExportPowerPoint(); }}>
+                      📑&ensp;Export to PowerPoint
+                    </div>
+                  </div>
+                </Callout>
+              )}
+            </>
+          )}
         </div>
       </div>
 
-      {/* ── Row 2: view controls ─────────────────────────────────────────── */}
-      <div className={styles.row2}>
+      {/* ── Row 2: view controls (hidden in portfolio mode) ─────────────── */}
+      {viewMode !== 'portfolio' && <div className={styles.row2}>
         <div className={styles.row2Left}>
           {/* Zoom + Today — Gantt view only */}
           {viewMode === 'gantt' && (
@@ -222,8 +295,17 @@ export const Toolbar: React.FC<IToolbarProps> = ({
                     <div className={styles.calloutItem} onClick={() => { setMoreCalloutVisible(false); onEditProject(); }}>
                       ✏️&ensp;Edit Project
                     </div>
+                    {selectedProject?.isArchived ? (
+                      <div className={styles.calloutItem} onClick={() => { setMoreCalloutVisible(false); onUnarchiveProject(); }}>
+                        📂&ensp;Unarchive Project
+                      </div>
+                    ) : (
+                      <div className={styles.calloutItem} onClick={() => { setMoreCalloutVisible(false); onArchiveProject(); }}>
+                        🗄️&ensp;Archive Project
+                      </div>
+                    )}
                     <div className={`${styles.calloutItem} ${styles.danger}`} onClick={() => { setMoreCalloutVisible(false); onDeleteProject(); }}>
-                      🗑️&ensp;Delete Project
+                      🗑️&ensp;Send to Recycle Bin
                     </div>
                   </div>
                 </Callout>
@@ -231,7 +313,7 @@ export const Toolbar: React.FC<IToolbarProps> = ({
             </>
           )}
         </div>
-      </div>
+      </div>}
     </div>
   );
 };

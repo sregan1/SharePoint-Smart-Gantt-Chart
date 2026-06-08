@@ -1,4 +1,4 @@
-# Smart Gantt Chart — User Guide
+# Smart Gantt Chart — User Guide · v1.1.0
 
 ---
 
@@ -10,11 +10,13 @@
 4. [Gantt Chart View](#4-gantt-chart-view)
 5. [List View](#5-list-view)
 6. [Kanban View](#6-kanban-view)
-7. [Display Settings](#7-display-settings)
-8. [Exporting](#8-exporting)
-9. [Importing Tasks](#9-importing-tasks)
-10. [Working with Multiple Projects](#10-working-with-multiple-projects)
-11. [Tips and Tricks](#11-tips-and-tricks)
+7. [Portfolio View](#7-portfolio-view)
+8. [Health Status Indicators](#8-health-status-indicators)
+9. [Display Settings](#9-display-settings)
+10. [Exporting](#10-exporting)
+11. [Importing Tasks](#11-importing-tasks)
+12. [Working with Multiple Projects](#12-working-with-multiple-projects) (archive, unarchive, delete)
+13. [Tips and Tricks](#13-tips-and-tricks)
 
 ---
 
@@ -36,7 +38,7 @@ Microsoft 365 **guest users** (external collaborators invited via Azure AD B2B) 
 
 Guests who have been invited to the SharePoint site and granted **Site Member (Contribute)** permission can:
 
-- View projects in all views — Gantt, List, Kanban, and Dashboard
+- View projects in all views — Portfolio, Gantt, List, Kanban, and Dashboard
 - Add, edit, and delete tasks
 - Export to Excel, PowerPoint, and PNG
 - Import tasks from an Excel or CSV file
@@ -225,6 +227,7 @@ Changes save to SharePoint in the background. No need to open the task panel for
 |---|---|
 | Task Name | Colored dot shows status; ◆ indicates a milestone; sub-tasks are indented |
 | Status | Color-coded badge; click to change inline |
+| Health | Automatic On Track / At Risk / Overdue badge — see [Health Status Indicators](#8-health-status-indicators) |
 | Priority | Click to change inline |
 | Start / Due | Due dates shown in red if overdue |
 | Assigned To | Avatar + first name |
@@ -264,15 +267,86 @@ Each card shows:
 - **Task name** (click to open the task panel)
 - Status and priority tags
 - Phase tag (if set)
+- **Health badge** — On Track, At Risk, Overdue, or Done (see [Health Status Indicators](#8-health-status-indicators))
 - Start → Due date (Due date shown in red if overdue)
 - Progress bar
 - Assignee avatar (initials, color-coded by name)
 
 ---
 
-## 7. Display Settings
+## 7. Portfolio View
 
-Click **⚙ Display** on the toolbar (visible in Gantt view only) to open the settings panel. Changes apply instantly — no save button needed.
+The Portfolio view gives you a bird's-eye view of all your projects — health, progress, and task counts — without switching between them one at a time.
+
+![Portfolio View](docs/screenshots/screenshot-portfolio.png)
+
+### Opening the Portfolio
+
+Click the **project selector dropdown** (top-left of the toolbar) and choose **⊞ Portfolio** at the top of the list. This is a cross-project view, so the view switcher tabs (Gantt, List, Kanban, Dashboard) are hidden while Portfolio is active.
+
+### Project Cards
+
+Each project appears as a card showing:
+
+| Element | Description |
+|---|---|
+| **Title + Manager avatar** | Project name and the project manager's initials |
+| **Status badge** | The project's manually set status (Active, On Hold, etc.) |
+| **Health badge** | Automatically computed health across the project's tasks — On Track, At Risk, Overdue, or Done |
+| **Overall progress bar** | Average % complete across all tasks, colored with the project's accent color |
+| **Task counts** | Done · Active · At Risk · Overdue — at a glance |
+| **Mini timeline** | Horizontal bar spanning the project's date range; a red tick marks today |
+
+### Navigating to a Project
+
+Click any card to open that project in the **Gantt view**.
+
+### Sorting and Refreshing
+
+Use the sort buttons in the Portfolio header to order cards by:
+
+- **A–Z** — alphabetical by project name
+- **Health** — worst health first (Overdue → At Risk → On Track → Done)
+- **Status** — alphabetical by status
+- **% Done** — highest completion first
+
+Click **↻ Refresh** to reload stats for all projects. Stats are also refreshed automatically after any task or project is created, edited, or deleted.
+
+---
+
+## 8. Health Status Indicators
+
+Health status is **computed automatically** from task dates and % complete. It is not a field you set — it updates in real time as task data changes.
+
+### How health is calculated
+
+| Health | Condition |
+|---|---|
+| **Done** | Task status is Completed or Cancelled |
+| **Overdue** | Due date is in the past and the task is not complete |
+| **At Risk** | Start date has passed but the task is still Not Started — OR — % complete is more than 10% behind what would be expected given the time elapsed between start and due date |
+| **On Track** | Everything else in progress |
+
+For projects, health is rolled up from tasks: a project is **Overdue** if any Critical or High priority task is overdue; **At Risk** if any Critical or High priority task is at risk, or if any task is overdue; **On Track** otherwise.
+
+### Where health appears
+
+| View | Where |
+|---|---|
+| **List view** | Health column between Status and Priority |
+| **Kanban view** | Badge on each card |
+| **Gantt view** | Tooltip on hover; bars can be colored by health (see Display Settings) |
+| **Portfolio view** | Badge on each project card; aggregate summary in the header |
+
+### Turning health badges on or off
+
+Open **⚙ Options** → **Show / Hide** → toggle **Health status badges**. When off, badges are hidden in the List, Kanban, and Gantt tooltip. The Portfolio view always shows health regardless of this setting.
+
+---
+
+## 9. Display Settings
+
+Click **⚙ Options** on the toolbar (visible when a project is selected) to open the settings panel. Changes apply instantly — no save button needed.
 
 ![Display Settings](docs/screenshots/screenshot-display-settings.png)
 
@@ -285,6 +359,7 @@ Controls what determines a task bar's color.
 | **By Status** | Not Started = gray · In Progress = blue · Completed = green · On Hold = orange · Cancelled = red |
 | **By Priority** | Critical = red · High = orange · Medium = blue · Low = green |
 | **By Phase** | Each phase name is hashed to a consistent color from a 15-color palette |
+| **By Health** | On Track = blue · At Risk = orange · Overdue = red · Done = green |
 
 A task's **Custom Color** (set in the Details tab) always overrides this setting.
 
@@ -320,10 +395,11 @@ Project weeks count from the Monday of or before the earliest task start date.
 | Dependency arrows | Curved arrows between predecessor and successor tasks |
 | Progress % on bars | Shows e.g. "40%" inside the task bar |
 | Assignee name on bars | Shows the assignee's name inside or beside the bar |
+| Health status badges | On Track / At Risk / Overdue badges in List, Kanban, and Gantt tooltip |
 
 ---
 
-## 8. Exporting
+## 10. Exporting
 
 All export options are in the **⋯ menu** (top-right of the toolbar, when a project is selected).
 
@@ -369,7 +445,7 @@ The export:
 
 ---
 
-## 9. Importing Tasks
+## 11. Importing Tasks
 
 Use import to bring existing tasks into a project. Access it from the **⋯ menu** → **Import Tasks…**
 
@@ -432,19 +508,29 @@ This is a one-time step for the entire tenant.
 
 ---
 
-## 10. Working with Multiple Projects
+## 12. Working with Multiple Projects
 
-The project selector dropdown (top-left of the toolbar) shows all your projects. Click it to switch between them or create a new one.
+The **project selector dropdown** (top-left of the toolbar) is your hub for navigating between projects. Click it to see:
+
+- **⊞ Portfolio** — see all projects at a glance (health, progress, task counts)
+- Individual projects — click any to switch to it
+- **+ New Project** — create a new project
 
 Each project is stored in its own SharePoint list, so tasks from different projects are completely separate. There is no cross-project dependency linking.
 
+**To see an overview of all projects:** Select **⊞ Portfolio** from the dropdown. See [Portfolio View](#7-portfolio-view) for details.
+
 **To rename or update a project:** Select the project, then click **Edit Project** in the toolbar (or use the **⋯** menu → **Edit Project**).
 
-**To delete a project:** Use the **⋯** menu → **Delete Project**. You'll be asked to confirm. This permanently deletes the project record **and** the entire task list — there is no undo.
+**To archive a project:** Use the **⋯** menu → **🗄️ Archive Project**. Archived projects are hidden from the project selector and Portfolio by default — they are not deleted. To see archived projects, open the project selector dropdown and tick **Show archived projects** at the bottom. Archived projects appear at reduced opacity with an "Archived" label.
+
+**To unarchive a project:** Toggle on **Show archived projects**, select the archived project, then use the **⋯** menu → **📂 Unarchive Project**.
+
+**To delete a project:** Use the **⋯** menu → **🗑️ Send to Recycle Bin**. You'll be asked to confirm. The project record and all its tasks are moved to the **SharePoint recycle bin** — they can be recovered from there for up to 93 days.
 
 ---
 
-## 11. Tips and Tricks
+## 13. Tips and Tricks
 
 **Keep Phase names consistent**
 The Phase field autocompletes from existing values in the project. Using the same spelling every time ensures tasks are grouped correctly on the Gantt. A typo like "Desgin" instead of "Design" creates a separate group.
@@ -468,4 +554,19 @@ Need to mark 10 tasks as Completed? Switch to List view and update each status c
 Start a project in Excel with your work breakdown structure, then import it. Mapping takes less than a minute and saves a lot of manual entry.
 
 **The ⋯ menu**
-The three-dot menu in the top-right of the toolbar contains all the less-common actions: Import, Export to Excel, Export to PowerPoint, Export as Image, Edit Project, and Delete Project.
+The three-dot menu in the top-right of the toolbar contains all the less-common actions: Import Tasks, Export to Excel, Export to PowerPoint, Export as Image, Edit Project, Archive Project, and Send to Recycle Bin. In Portfolio view, the same ⋯ menu contains Export to Excel and Export to PowerPoint for the full portfolio.
+
+**Archive projects you no longer actively manage**
+Rather than deleting a completed or cancelled project, use **Archive Project** to hide it from view. It stays in SharePoint and can be restored at any time via **Show archived projects** in the project selector. This is safer than deleting and keeps historical task data intact.
+
+**Use Portfolio for a weekly status check**
+Start your Monday by opening ⊞ Portfolio. Any project card showing At Risk or Overdue health immediately tells you where attention is needed — without having to click into each project.
+
+**Color bars by health for a quick visual scan**
+In Display Settings, set Color Coding to **By Health**. Every overdue task turns red and every at-risk task turns orange — helpful for spotting scheduling problems across a large project at a glance.
+
+**Health is computed from % Complete and dates — keep both updated**
+Health status checks whether your actual progress matches the time elapsed. A task that is 0% complete two weeks after its start date will show as At Risk even if the due date hasn't passed yet. Update % Complete regularly (the slider in the task panel or the Kanban card drag both work) to get an accurate health picture.
+
+**Turn off health badges before exporting for a cleaner image**
+If the health badges feel visually busy in an export or presentation, open **⚙ Options → Show / Hide** and toggle off **Health status badges** before exporting to PNG or PowerPoint.

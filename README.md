@@ -1,11 +1,13 @@
-# SharePoint Smart Gantt Chart
+# SharePoint Smart Gantt Chart — SPFx Project Management Web Part
 
-[![Website](https://img.shields.io/badge/Website-sharepointsmartsolutions.com-0078D4?style=for-the-badge&logo=microsoftsharepoint&logoColor=white)](http://sharepointsmartsolutions.com/smart-gantt)
-[![User Guide](https://img.shields.io/badge/User_Guide-Read%20the%20Docs-107C10?style=for-the-badge&logo=readthedocs&logoColor=white)](USER_GUIDE.md)
+[![Website](https://img.shields.io/badge/Website-sharepointsmartsolutions.com-0078D4?style=for-the-badge&logo=microsoftsharepoint&logoColor=white)](https://sharepointsmartsolutions.com/smart-gantt)
+[![User Guide](https://img.shields.io/badge/User_Guide-Read%20the%20Docs-107C10?style=for-the-badge&logo=readthedocs&logoColor=white)](USER-GUIDE.md)
+[![Download](https://img.shields.io/badge/Download-Latest%20Release-CA5010?style=for-the-badge&logo=github&logoColor=white)](../../releases/latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 
-A SharePoint Framework (SPFx) web part for project management with three views — Gantt chart, list, and Kanban board — all backed by SharePoint lists.
+A SharePoint Framework (SPFx) web part for project management with five views — Portfolio, Gantt chart, List, Kanban board, and Dashboard — all backed by SharePoint lists.
 
-![SPFx](https://img.shields.io/badge/SPFx-1.20.0-blue) ![Node](https://img.shields.io/badge/Node-18.x-green) ![React](https://img.shields.io/badge/React-17-blue) [![License: MIT](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
+![SPFx](https://img.shields.io/badge/SPFx-1.20.0-0078D4?logo=microsoft&logoColor=white) ![Node](https://img.shields.io/badge/Node-18.x-339933?logo=nodedotjs&logoColor=white) ![React](https://img.shields.io/badge/React-17-61DAFB?logo=react&logoColor=black) ![TypeScript](https://img.shields.io/badge/TypeScript-4.7-3178C6?logo=typescript&logoColor=white) ![PnPjs](https://img.shields.io/badge/PnPjs-3.26-orange) ![pptxgenjs](https://img.shields.io/badge/pptxgenjs-4.0-blueviolet)
 
 ![Gantt Chart View](docs/screenshots/screenshot-gantt.png)
 
@@ -13,11 +15,13 @@ A SharePoint Framework (SPFx) web part for project management with three views �
 
 ## Features
 
+- **Portfolio View** — Cross-project overview showing all projects as summary cards with computed health indicators, progress bars, task counts, and a mini date-range timeline. Accessible from the project selector dropdown.
+- **Health Status** — Automatic "On Track / At Risk / Overdue" indicators computed from each task's dates and progress percentage — no manual entry required. Shown as badges in the List, Kanban, Gantt tooltip, and Portfolio views, with a "By Health" Gantt bar color option.
 - **Gantt Chart** — Custom SVG timeline with drag-to-move, drag-to-resize, dependency arrows, phase grouping, zoom levels (Day / Week / Month / Quarter), and a today indicator
-- **List View** — Sortable, Excel-style grid with inline status and priority editing, overdue highlighting, and progress bars
-- **Kanban Board** — Drag-and-drop cards across status columns (Not Started → In Progress → On Hold → Completed → Cancelled)
+- **List View** — Sortable, Excel-style grid with inline status and priority editing, overdue highlighting, progress bars, and health badges
+- **Kanban Board** — Drag-and-drop cards across status columns (Not Started → In Progress → On Hold → Completed → Cancelled), with health badges on each card
 - **Project management** — Each project gets its own SharePoint list with 15 pre-built columns (status, priority, dates, assignee, % complete, phase, milestones, dependencies, and more)
-- **Display settings** — Customize colors, header theme, week numbering, bar style, row height, and more for the Gantt view
+- **Display settings** — Customize colors (including by health), header theme, week numbering, bar style, row height, and show/hide toggles including health badges
 - **Export** — Download tasks as Excel, export a full PowerPoint project report (cover, summary, Gantt chart, and recent activity), or save the Gantt as a high-resolution PNG
 - **Import** — Bring in tasks from Excel/CSV files (including MS Project exports) or directly from Microsoft Planner, with a column-mapping screen for non-standard headers
 - **Autocomplete** — Phase and Assigned To fields suggest values already used in the project
@@ -25,6 +29,17 @@ A SharePoint Framework (SPFx) web part for project management with three views �
 ---
 
 ## Views
+
+### Portfolio View
+
+![Portfolio View](docs/screenshots/screenshot-portfolio.png)
+
+- Accessible from the **project selector dropdown** (⊞ Portfolio) — not a tab in the view switcher
+- Responsive card grid showing all projects at a glance
+- Each card shows: project name, manager avatar, manual status badge, computed health badge, overall progress bar, task count breakdown (Done / Active / At Risk / Overdue), and a mini timeline bar with a today marker
+- Header bar shows aggregate health summary (X On Track / Y At Risk / Z Overdue) across all projects
+- Sort cards by name, health, status, or completion percentage
+- Click any card to navigate directly into that project's Gantt view
 
 ### Gantt Chart
 
@@ -34,11 +49,11 @@ A SharePoint Framework (SPFx) web part for project management with three views �
 - Two-row toolbar: project/task actions on the first row; view and zoom controls on the second
 - Sticky task list on the left; scrollable SVG timeline on the right
 - Four zoom levels: Day, Week, Month, Quarter
-- Task bars color-coded by status, priority, or phase; progress overlay shows % complete
+- Task bars color-coded by status, priority, phase, or health; progress overlay shows % complete
 - Drag a bar horizontally to move dates; drag the right edge to resize
 - Dependency arrows drawn between tasks
 - Phase rows collapse/expand to group related tasks
-- Hover tooltip shows task name, dates, status, priority, assignee, and % complete
+- Hover tooltip shows task name, dates, status, priority, assignee, % complete, and health indicator
 - Today line with red indicator
 
 ### List View
@@ -47,6 +62,7 @@ A SharePoint Framework (SPFx) web part for project management with three views �
 
 - Click any column header to sort ascending/descending
 - Change status or priority inline via dropdown — saves to SharePoint immediately
+- **Health** column shows an automatic On Track / At Risk / Overdue badge for each task
 - Overdue tasks highlighted in red
 - Phase group rows visually separate tasks
 - Subtasks indented under their parent
@@ -57,7 +73,7 @@ A SharePoint Framework (SPFx) web part for project management with three views �
 
 - Five columns matching task statuses
 - Drag cards between columns to update status
-- Cards show priority color, tags, due date, assignee avatar, and progress bar
+- Cards show priority color, tags, health badge, due date, assignee avatar, and progress bar
 - Add Task button in each column
 
 ### Task Panel
@@ -77,16 +93,16 @@ Click any task name or **+ Add Task** to open the task panel. It has three tabs:
 
 ## Display Settings
 
-Click **⚙ Display** in the toolbar while in Gantt view to open the settings panel.
+Click **⚙ Options** in the toolbar (visible when a project is selected) to open the settings panel.
 
 | Setting | Options |
 |---|---|
-| **Color Coding** | By Status, By Priority, By Phase (each phase gets a consistent auto-color) |
+| **Color Coding** | By Status, By Priority, By Phase (each phase gets a consistent auto-color), **By Health** (On Track = blue, At Risk = orange, Overdue = red) |
 | **Header Color** | Dark (default), Navy, Teal, Purple, Light |
 | **Week Numbering** | ISO weeks (W23, W24…) or Project-relative (W1, W2, W3… from the first task's start date) |
 | **Bar Style** | Gradient or Flat |
 | **Row Height** | Compact (32px), Normal (40px), Spacious (52px) |
-| **Show / Hide** | Weekend shading, dependency arrows, progress % on bars, assignee name on bars |
+| **Show / Hide** | Weekend shading, dependency arrows, progress % on bars, assignee name on bars, **health status badges** |
 
 Settings are applied live and remembered for the session.
 
@@ -148,7 +164,7 @@ Once a guest has been invited to the SharePoint site and granted **Site Member (
 
 | Feature | Supported |
 |---|---|
-| View projects, tasks, and all views (Gantt, List, Kanban, Dashboard) | ✅ |
+| View projects, tasks, and all views (Portfolio, Gantt, List, Kanban, Dashboard) | ✅ |
 | Add, edit, and delete tasks | ✅ |
 | Export to Excel, PowerPoint, and PNG | ✅ (all client-side) |
 | Be assigned to tasks | ✅ (Assigned To is a plain-text field — no Azure AD lookup required) |
@@ -174,7 +190,22 @@ Once a guest has been invited to the SharePoint site and granted **Site Member (
 
 ## Getting Started
 
-### 1. Clone and install
+> **No build required.** Download the pre-built `.sppkg` from the [latest release](../../releases/latest), upload it to your App Catalog, and you're done. The steps below are only needed if you want to modify or develop the web part.
+
+### Deploy (no build needed)
+
+1. Go to the [latest release](../../releases/latest) and download `sharepoint-smart-gantt-chart.sppkg`
+2. Upload it to your **SharePoint App Catalog** (tenant-wide or site collection)
+3. Approve any API permission requests if prompted (required for Planner import only — see [Planner Import Setup](#planner-import-setup))
+4. Add the **Smart Gantt Chart** web part to any SharePoint page
+
+That's it — no Node.js, no build tools, no configuration files.
+
+---
+
+### Develop (build from source)
+
+#### 1. Clone and install
 
 ```bash
 git clone <repo-url>
@@ -182,7 +213,7 @@ cd SharePointSmartGanttChart
 npm install
 ```
 
-### 2. Configure the workbench URL
+#### 2. Configure the workbench URL
 
 `config/serve.json` is excluded from the repo (it contains your tenant URL). Copy the example file and fill in your tenant:
 
@@ -200,13 +231,13 @@ Then edit `config/serve.json`:
 }
 ```
 
-### 3. Trust the dev certificate (first time only)
+#### 3. Trust the dev certificate (first time only)
 
 ```bash
 gulp trust-dev-cert
 ```
 
-### 4. Run the dev server
+#### 4. Run the dev server
 
 ```bash
 gulp serve
@@ -302,6 +333,19 @@ These permissions are tenant-wide and only need to be approved once.
 
 ---
 
+## Sample Data
+
+Two ready-to-import `.xlsx` files are included in [`docs/sample-data/`](docs/sample-data/) to help you try the import feature immediately.
+
+| File | Scenario | Phases | Tasks |
+|---|---|---|---|
+| `Tech-Conference-Tasks.xlsx` | Annual tech conference planning, conference days Oct 1–2 2026 | Planning, Content, Logistics, Marketing | 25 |
+| `Website-Rollout-Tasks.xlsx` | Corporate website redesign and launch project | Discovery, Design, Build, Launch | 20 |
+
+Import either file via **⋯ menu → Import Tasks…** — all columns are named to match Smart Gantt's auto-mapping, so no manual column mapping is required.
+
+---
+
 ## Project Structure
 
 ```
@@ -311,26 +355,35 @@ src/
     ├── SmartGanttWebPart.manifest.json
     ├── models/
     │   └── index.ts                      # IProject, ITask, IGanttDisplaySettings,
+    │                                     # TaskHealth, ProjectHealth, IProjectTaskStats,
     │                                     # color constants, theme definitions
+    ├── utils/
+    │   └── healthUtils.ts                # computeTaskHealth, computeProjectHealth,
+    │                                     # healthColor, healthLabel — pure functions, no React
     ├── services/
-    │   ├── SharePointService.ts          # All SharePoint list operations (PnPjs)
+    │   ├── SharePointService.ts          # All SharePoint list operations (PnPjs);
+    │                                     # includes getProjectTaskStats, getAllProjectStats
     │   ├── ImportService.ts              # Excel parsing, Planner Graph calls, batch import
     │   └── ExportService.ts              # Excel export, SVG/PNG Gantt rendering
     └── components/
         ├── SmartGantt.tsx                # Root component — state, routing between views
         ├── toolbar/
-        │   └── Toolbar.tsx               # Two-row toolbar: project actions + view controls
+        │   └── Toolbar.tsx               # Two-row toolbar: project selector (with Portfolio
+        │                                 # entry) + view controls
         ├── gantt/
         │   ├── GanttChart.tsx            # Custom SVG Gantt chart
         │   └── GanttSettings.tsx         # Display settings panel
         ├── views/
-        │   ├── ListView.tsx              # Sortable grid view
-        │   └── KanbanView.tsx            # Drag-and-drop Kanban board
+        │   ├── ListView.tsx              # Sortable grid view with health column
+        │   ├── KanbanView.tsx            # Drag-and-drop Kanban board with health badges
+        │   ├── DashboardView.tsx         # Summary stats and recent activity
+        │   └── PortfolioView.tsx         # Cross-project card grid with health and stats
         ├── panels/
         │   ├── ProjectPanel.tsx          # Create / edit project side panel
         │   └── TaskPanel.tsx             # Create / edit task side panel (3 tabs)
         ├── common/
-        │   └── AutocompleteField.tsx     # Reusable keyboard-navigable suggestion input
+        │   ├── AutocompleteField.tsx     # Reusable keyboard-navigable suggestion input
+        │   └── HealthBadge.tsx           # On Track / At Risk / Overdue / Done pill badge
         └── import/
             ├── ImportPanel.tsx           # 4-step import flow
             └── ColumnMapper.tsx          # Column mapping UI with auto-map and preview
@@ -347,6 +400,7 @@ src/
 | Fluent UI | 8.125.6 | Microsoft design system components |
 | PnPjs | 3.26.0 | SharePoint REST API client |
 | SheetJS (xlsx) | 0.18.5 | Excel/CSV file parsing and export |
+| pptxgenjs | 4.0.1 | PowerPoint export |
 | date-fns | 2.30.0 | Date calculations for Gantt rendering and export |
 
 Microsoft Graph is accessed via the SPFx built-in `msGraphClientFactory` — no extra SDK required.
@@ -365,6 +419,22 @@ All other configuration (projects, tasks, colors, display settings) is managed t
 
 ---
 
+## Troubleshooting
+
+**"You do not have permission to create lists"** — Project creation requires Site Owner permissions. Ask your SharePoint site owner to create the first project, after which Site Members can manage all tasks within it.
+
+**"Planner plans are not showing up"** — The three Microsoft Graph permissions (`Tasks.Read`, `Group.Read.All`, `User.ReadBasic.All`) have not been approved. A Microsoft 365 admin must approve them once in **SharePoint Admin Center → Advanced → API Access**. See [Planner Import Setup](#planner-import-setup).
+
+**`gulp serve` fails with a certificate error** — Run `gulp trust-dev-cert` once to install the local dev certificate, then retry `gulp serve`.
+
+**`gulp serve` fails with a Node version error** — SPFx 1.20.0 requires Node 18.x exactly. Use [nvm-windows](https://github.com/coreybutler/nvm-windows) to switch: `nvm use 18`.
+
+**Portfolio view is slow to load** — Stats for all projects are fetched in parallel on first visit. For portfolios with 20+ projects, this may take several seconds. A loading spinner is displayed while fetching. Stats are cached until the next project or task change.
+
+**Display settings reset after a page reload** — This is expected behavior in the current version. Settings are session-only and reset on reload. See [Known Limitations](#known-limitations).
+
+---
+
 ## Known Limitations
 
 - **MS Project Desktop (.mpp files)** — the binary `.mpp` format cannot be parsed in a browser. Use File → Save As → Excel in Project Desktop instead.
@@ -373,3 +443,25 @@ All other configuration (projects, tasks, colors, display settings) is managed t
 - **Display settings** are session-only and reset on page reload. Future work could persist them to the web part property bag.
 - The web part requires **Site Owner** permissions on the SharePoint site for the first project creation (list creation). Subsequent task operations work with Site Member permissions.
 - **Guest users** cannot create projects (list creation requires elevated permissions), but can fully manage tasks in existing projects. See [External / Guest User Access](#external--guest-user-access) for setup instructions.
+- **Portfolio view** loads task stats for all projects in parallel on first visit. For portfolios with 30+ projects this may take a few seconds; a spinner is shown while loading.
+
+---
+
+## Screenshots
+
+| | |
+|---|---|
+| **Portfolio view** | **Gantt chart** |
+| ![Portfolio view](docs/screenshots/screenshot-portfolio.png) | ![Gantt chart](docs/screenshots/screenshot-gantt.png) |
+| **List view with Health column** | **Kanban board** |
+| ![List view](docs/screenshots/screenshot-list.png) | ![Kanban board](docs/screenshots/screenshot-kanban.png) |
+| **Display Settings** | **Export menu** |
+| ![Display Settings](docs/screenshots/screenshot-display-settings.png) | ![Export menu](docs/screenshots/screenshot-export-menu.png) |
+| **Task panel — Details tab** | **Task panel — Links tab** |
+| ![Task panel — Details tab](docs/screenshots/screenshot-task-panel-details.png) | ![Task panel — Links tab](docs/screenshots/screenshot-task-panel-links.png) |
+
+---
+
+## License
+
+[MIT](LICENSE) © 2026 Sean Regan

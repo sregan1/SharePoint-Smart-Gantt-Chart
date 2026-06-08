@@ -4,11 +4,14 @@ import {
   ITask, IProject, TaskStatus,
   STATUS_COLORS, STATUS_LIGHT_COLORS, PRIORITY_COLORS,
 } from '../../models';
+import { computeTaskHealth } from '../../utils/healthUtils';
+import { HealthBadge } from '../common/HealthBadge';
 import styles from './KanbanView.module.scss';
 
 interface IKanbanViewProps {
   tasks: ITask[];
   project: IProject;
+  showHealthBadges?: boolean;
   onEditTask: (task: ITask) => void;
   onDeleteTask: (id: number) => void;
   onTaskUpdate: (id: number, updates: Partial<ITask>) => void;
@@ -50,7 +53,7 @@ function stringToColor(s: string): string {
 }
 
 export const KanbanView: React.FC<IKanbanViewProps> = ({
-  tasks, onEditTask, onDeleteTask, onTaskUpdate, onAddTask,
+  tasks, showHealthBadges = true, onEditTask, onDeleteTask, onTaskUpdate, onAddTask,
 }) => {
   const [draggingId, setDraggingId] = React.useState<number | null>(null);
   const [dragOverCol, setDragOverCol] = React.useState<TaskStatus | null>(null);
@@ -180,6 +183,9 @@ export const KanbanView: React.FC<IKanbanViewProps> = ({
             <span className={styles.cardTag} style={{ background: '#F3F2F1', color: '#605E5C' }}>
               {task.phase}
             </span>
+          )}
+          {showHealthBadges && (
+            <HealthBadge health={computeTaskHealth(task)} size="sm" />
           )}
         </div>
 

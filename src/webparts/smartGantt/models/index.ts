@@ -10,6 +10,7 @@ export interface IProject {
   projectManager: string;
   projectManagerEmail: string;
   created: string;
+  isArchived?: boolean;
 }
 
 export type ProjectStatus = 'Planning' | 'Active' | 'On Hold' | 'Completed' | 'Cancelled';
@@ -79,12 +80,30 @@ export const PROJECT_COLORS = [
   '#D13438', '#C43148', '#00B7C3', '#881798', '#498205',
 ];
 
-export type ViewMode = 'gantt' | 'list' | 'kanban' | 'dashboard';
+export type ViewMode = 'gantt' | 'list' | 'kanban' | 'dashboard' | 'portfolio';
 export type ZoomLevel = 'day' | 'week' | 'month' | 'quarter';
+
+export type TaskHealth = 'complete' | 'on-track' | 'at-risk' | 'overdue';
+export type ProjectHealth = 'complete' | 'on-track' | 'at-risk' | 'overdue';
+
+export interface IProjectTaskStats {
+  listName: string;
+  totalTasks: number;
+  byStatus: Record<TaskStatus, number>;
+  overallPct: number;
+  health: ProjectHealth;
+  overdueCount: number;
+  atRiskCount: number;
+  inProgressCount: number;
+  completedCount: number;
+  milestoneCount: number;
+  earliestStart: string;
+  latestDue: string;
+}
 
 // ─── Gantt display settings ───────────────────────────────────────────────────
 
-export type GanttColorBy = 'status' | 'priority' | 'phase';
+export type GanttColorBy = 'status' | 'priority' | 'phase' | 'health';
 export type GanttWeekLabel = 'dates' | 'project' | 'iso';
 export type GanttHeaderTheme = 'dark' | 'navy' | 'teal' | 'purple' | 'light';
 export type GanttBarStyle = 'gradient' | 'flat';
@@ -99,6 +118,7 @@ export interface IGanttDisplaySettings {
   showDependencies: boolean;
   showProgressText: boolean;
   showAssignee: boolean;
+  showHealthBadges: boolean;
 }
 
 export const DEFAULT_GANTT_SETTINGS: IGanttDisplaySettings = {
@@ -111,6 +131,7 @@ export const DEFAULT_GANTT_SETTINGS: IGanttDisplaySettings = {
   showDependencies: true,
   showProgressText: true,
   showAssignee: false,
+  showHealthBadges: true,
 };
 
 export const HEADER_THEME_COLORS: Record<GanttHeaderTheme, { bg: string; text: string; subtext: string }> = {

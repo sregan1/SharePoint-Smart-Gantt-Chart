@@ -5,11 +5,14 @@ import {
   STATUS_COLORS, STATUS_LIGHT_COLORS, PRIORITY_COLORS,
   TASK_STATUS_OPTIONS, TASK_PRIORITY_OPTIONS,
 } from '../../models';
+import { computeTaskHealth } from '../../utils/healthUtils';
+import { HealthBadge } from '../common/HealthBadge';
 import styles from './ListView.module.scss';
 
 interface IListViewProps {
   tasks: ITask[];
   project: IProject;
+  showHealthBadges?: boolean;
   onEditTask: (task: ITask) => void;
   onDeleteTask: (id: number) => void;
   onTaskUpdate: (id: number, updates: Partial<ITask>) => void;
@@ -46,7 +49,7 @@ function stringToColor(s: string): string {
 }
 
 export const ListView: React.FC<IListViewProps> = ({
-  tasks, onEditTask, onDeleteTask, onTaskUpdate, onAddTask,
+  tasks, showHealthBadges = true, onEditTask, onDeleteTask, onTaskUpdate, onAddTask,
 }) => {
   const [sortField, setSortField] = React.useState<SortField>('sortOrder' as any);
   const [sortDir, setSortDir] = React.useState<SortDir>('asc');
@@ -150,6 +153,7 @@ export const ListView: React.FC<IListViewProps> = ({
             <tr>
               <SortTh field="title" label="Task Name" />
               <SortTh field="status" label="Status" width={130} />
+              {showHealthBadges && <th style={{ width: 100 }}>Health</th>}
               <SortTh field="priority" label="Priority" width={100} />
               <SortTh field="startDate" label="Start" width={110} />
               <SortTh field="dueDate" label="Due" width={110} />
@@ -217,6 +221,13 @@ export const ListView: React.FC<IListViewProps> = ({
                       ))}
                     </select>
                   </td>
+
+                  {/* Health */}
+                  {showHealthBadges && (
+                    <td>
+                      <HealthBadge health={computeTaskHealth(task)} size="sm" />
+                    </td>
+                  )}
 
                   {/* Priority */}
                   <td>

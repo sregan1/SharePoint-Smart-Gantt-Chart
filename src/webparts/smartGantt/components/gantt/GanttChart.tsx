@@ -8,6 +8,8 @@ import {
   IProject, ITask, ZoomLevel, STATUS_COLORS, PRIORITY_COLORS,
   IGanttDisplaySettings, DEFAULT_GANTT_SETTINGS, HEADER_THEME_COLORS, phaseColor,
 } from '../../models';
+import { computeTaskHealth, healthColor } from '../../utils/healthUtils';
+import { HealthBadge } from '../common/HealthBadge';
 import styles from './GanttChart.module.scss';
 
 interface IGanttChartProps {
@@ -75,6 +77,7 @@ function getTaskColor(task: ITask, settings: IGanttDisplaySettings): string {
   if (task.color) return task.color;
   if (settings.colorBy === 'priority') return PRIORITY_COLORS[task.priority] || '#0078D4';
   if (settings.colorBy === 'phase' && task.phase) return phaseColor(task.phase);
+  if (settings.colorBy === 'health') return healthColor(computeTaskHealth(task));
   return STATUS_COLORS[task.status] || '#0078D4';
 }
 
@@ -831,6 +834,11 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
             <span>⬛</span>
             <span>{tooltip.task.percentComplete}% complete</span>
           </div>
+          {settings.showHealthBadges && (
+            <div className={styles.tooltipRow}>
+              <HealthBadge health={computeTaskHealth(tooltip.task)} size="md" />
+            </div>
+          )}
           {tooltip.task.phase && (
             <div className={styles.tooltipRow}>
               <span>🏷</span>

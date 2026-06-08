@@ -12,7 +12,34 @@ if (!fs.existsSync(OUT)) fs.mkdirSync(OUT, { recursive: true });
 
 // ── Dummy data ─────────────────────────────────────────────────────────────
 const PROJECT = { title: 'Website Redesign', color: '#0078D4', status: 'Active' };
-const TODAY = new Date('2026-06-04');
+const TODAY = new Date('2026-06-07');
+
+// Health helpers (mirrors src/utils/healthUtils.ts logic)
+function computeHealth(task) {
+  if (task.status === 'Completed' || task.status === 'Cancelled') return 'complete';
+  const today = TODAY, end = new Date(task.end), start = new Date(task.start);
+  if (end < today) return 'overdue';
+  if (start < today && task.status === 'Not Started') return 'at-risk';
+  if (task.pct !== undefined) {
+    const total = (end - start) / 86400000;
+    if (total >= 3) {
+      const elapsed = (today - start) / 86400000;
+      const expected = (elapsed / total) * 100;
+      if (task.pct < expected - 10) return 'at-risk';
+    }
+  }
+  return 'on-track';
+}
+const HEALTH_COLOR = { complete: '#107C10', 'on-track': '#0078D4', 'at-risk': '#CA5010', overdue: '#D13438' };
+const HEALTH_BG    = { complete: '#F1FAF1', 'on-track': '#EFF6FC', 'at-risk': '#FFF4EC', overdue: '#FDF3F4' };
+const HEALTH_LABEL = { complete: 'Done', 'on-track': 'On Track', 'at-risk': 'At Risk', overdue: 'Overdue' };
+function healthBadge(health, size) {
+  const c = HEALTH_COLOR[health], bg = HEALTH_BG[health], label = HEALTH_LABEL[health];
+  if (size === 'md') {
+    return `<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;background:${bg};color:${c};white-space:nowrap;"><span style="width:6px;height:6px;border-radius:50%;background:${c};flex-shrink:0;"></span>${label}</span>`;
+  }
+  return `<span style="display:inline-flex;align-items:center;gap:4px;padding:1px 7px;border-radius:10px;font-size:10px;font-weight:600;background:${bg};color:${c};white-space:nowrap;"><span style="width:5px;height:5px;border-radius:50%;background:${c};flex-shrink:0;"></span>${label}</span>`;
+}
 
 const TASKS = [
   { id:1, phase:'Discovery', title:'Requirements Gathering', status:'Completed',   pct:100, assignee:'Sarah M.', start:'2026-05-15', end:'2026-05-27', priority:'High'   },
@@ -282,18 +309,20 @@ function listPage() {
   let lastPhase = null;
   for (const t of TASKS) {
     if (t.phase !== lastPhase) {
-      rows += `<tr style="background:#F3F2F1;"><td colspan="7" style="padding:6px 12px;font-size:11px;font-weight:700;color:#605E5C;letter-spacing:0.5px;">${t.phase.toUpperCase()}</td></tr>`;
+      rows += `<tr style="background:#F3F2F1;"><td colspan="8" style="padding:6px 12px;font-size:11px;font-weight:700;color:#605E5C;letter-spacing:0.5px;">${t.phase.toUpperCase()}</td></tr>`;
       lastPhase = t.phase;
     }
     const sc = STATUS_COLOR[t.status], sbg = STATUS_BG[t.status];
     const pc = PRIORITY_COLOR[t.priority];
     const due = isOverdue(t.end) && t.status !== 'Completed';
+    const health = computeHealth(t);
     rows += `<tr style="border-bottom:1px solid #F3F2F1;">
       <td style="padding:10px 12px;display:flex;align-items:center;gap:8px;">
         <span style="width:8px;height:8px;border-radius:50%;background:${sc};display:inline-block;flex-shrink:0;"></span>
         <span style="font-size:13px;color:#323130;">${t.milestone?'◆ ':''}${t.title}</span>
       </td>
       <td style="padding:10px 12px;"><span style="padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;background:${sbg};color:${sc};">${t.status}</span></td>
+      <td style="padding:10px 12px;">${healthBadge(health)}</td>
       <td style="padding:10px 12px;"><span style="padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;background:${sbg};color:${pc};">${t.priority}</span></td>
       <td style="padding:10px 12px;font-size:12px;color:#605E5C;">${fmtDate(t.start)}</td>
       <td style="padding:10px 12px;font-size:12px;color:${due?'#D13438':'#605E5C'};">${fmtDate(t.end)}${due?' ⚠':''}</td>
@@ -317,6 +346,7 @@ function listPage() {
           <tr style="background:#F3F2F1;border-bottom:1px solid #EDEBE9;">
             <th style="padding:10px 12px;font-size:11px;font-weight:600;color:#605E5C;text-align:left;min-width:250px;">TASK NAME ↑</th>
             <th style="padding:10px 12px;font-size:11px;font-weight:600;color:#605E5C;text-align:left;">STATUS</th>
+            <th style="padding:10px 12px;font-size:11px;font-weight:600;color:#605E5C;text-align:left;">HEALTH</th>
             <th style="padding:10px 12px;font-size:11px;font-weight:600;color:#605E5C;text-align:left;">PRIORITY</th>
             <th style="padding:10px 12px;font-size:11px;font-weight:600;color:#605E5C;text-align:left;">START</th>
             <th style="padding:10px 12px;font-size:11px;font-weight:600;color:#605E5C;text-align:left;">DUE</th>
@@ -338,6 +368,7 @@ function kanbanPage() {
   function card(t) {
     const sc = STATUS_COLOR[t.status], pc = PRIORITY_COLOR[t.priority];
     const initials = t.assignee ? t.assignee.split(' ').map(w=>w[0]).join('').substring(0,2) : null;
+    const health = computeHealth(t);
     return `<div style="background:#fff;border:1px solid #EDEBE9;border-radius:6px;padding:10px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.04);">
       <div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:6px;">
         <div style="width:6px;height:6px;border-radius:50%;background:${pc};flex-shrink:0;margin-top:5px;"></div>
@@ -346,6 +377,7 @@ function kanbanPage() {
       <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;">
         <span style="padding:1px 6px;border-radius:10px;font-size:10px;font-weight:600;background:${STATUS_BG[t.status]};color:${sc};">${t.status}</span>
         <span style="padding:1px 6px;border-radius:10px;font-size:10px;background:#F3F2F1;color:#605E5C;">${t.phase}</span>
+        ${healthBadge(health)}
       </div>
       ${!t.milestone ? `<div style="font-size:11px;color:#605E5C;margin-bottom:6px;">${fmtDate(t.start)} → ${fmtDate(t.end)}</div>` : ''}
       <div style="display:flex;align-items:center;gap:6px;">
@@ -471,7 +503,7 @@ function displaySettingsPage() {
 
         <div style="margin-bottom:16px;">
           <div style="font-size:12px;font-weight:600;color:#323130;margin-bottom:8px;">Color Coding</div>
-          ${['By Status','By Priority','By Phase'].map((o,i)=>`
+          ${['By Status','By Priority','By Phase','By Health'].map((o,i)=>`
           <label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;">
             <input type="radio" name="color" ${i===0?'checked':''} style="accent-color:${PROJECT.color};"/> <span style="font-size:13px;color:#323130;">${o}</span>
           </label>`).join('')}
@@ -513,10 +545,10 @@ function displaySettingsPage() {
 
         <div>
           <div style="font-size:12px;font-weight:600;color:#323130;margin-bottom:8px;">Show / Hide</div>
-          ${['Weekend shading','Dependency arrows','Progress % on bars','Assignee name on bars'].map((o,i)=>`
+          ${['Weekend shading','Dependency arrows','Progress % on bars','Assignee name on bars','Health status badges'].map((o,i)=>`
           <label style="display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer;">
-            <div style="width:32px;height:18px;background:${i<2?PROJECT.color:'#EDEBE9'};border-radius:9px;position:relative;flex-shrink:0;">
-              <div style="width:14px;height:14px;background:white;border-radius:50%;position:absolute;top:2px;${i<2?'right:2px':'left:2px'};box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
+            <div style="width:32px;height:18px;background:${i<3?PROJECT.color:'#EDEBE9'};border-radius:9px;position:relative;flex-shrink:0;">
+              <div style="width:14px;height:14px;background:white;border-radius:50%;position:absolute;top:2px;${i<3?'right:2px':'left:2px'};box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
             </div>
             <span style="font-size:13px;color:#323130;">${o}</span>
           </label>`).join('')}
@@ -904,6 +936,216 @@ function pptxPreviewPage() {
 </body></html>`;
 }
 
+// ── 10. Portfolio view ─────────────────────────────────────────────────────
+function portfolioPage() {
+  const PROJECTS_DATA = [
+    {
+      id: 1, title: 'Website Redesign', color: '#0078D4', status: 'Active',
+      manager: 'Sarah M.', start: '2026-05-15', end: '2026-08-07',
+      tasks: TASKS,
+    },
+    {
+      id: 2, title: 'Mobile App Launch', color: '#107C10', status: 'Active',
+      manager: 'Mike R.', start: '2026-04-01', end: '2026-07-31',
+      tasks: [
+        { status:'Completed',   pct:100, priority:'High',   start:'2026-04-01', end:'2026-04-20' },
+        { status:'Completed',   pct:100, priority:'Medium', start:'2026-04-15', end:'2026-05-05' },
+        { status:'In Progress', pct:85,  priority:'High',   start:'2026-05-01', end:'2026-05-30' },
+        { status:'In Progress', pct:60,  priority:'High',   start:'2026-05-20', end:'2026-06-15' },
+        { status:'In Progress', pct:30,  priority:'Medium', start:'2026-06-01', end:'2026-06-30' },
+        { status:'Not Started', pct:0,   priority:'Medium', start:'2026-07-01', end:'2026-07-25' },
+        { status:'Not Started', pct:0,   priority:'Low',    start:'2026-07-15', end:'2026-07-31' },
+      ],
+    },
+    {
+      id: 3, title: 'Data Platform Migration', color: '#CA5010', status: 'Planning',
+      manager: 'Dave C.', start: '2026-06-01', end: '2026-09-30',
+      tasks: [
+        { status:'Not Started', pct:0,  priority:'Critical', start:'2026-05-15', end:'2026-06-01' },
+        { status:'Not Started', pct:0,  priority:'High',     start:'2026-06-10', end:'2026-07-10' },
+        { status:'Not Started', pct:0,  priority:'Medium',   start:'2026-07-01', end:'2026-08-15' },
+        { status:'Not Started', pct:0,  priority:'Medium',   start:'2026-08-01', end:'2026-09-15' },
+        { status:'Not Started', pct:0,  priority:'Low',      start:'2026-09-01', end:'2026-09-30' },
+      ],
+    },
+    {
+      id: 4, title: 'Brand Refresh', color: '#8764B8', status: 'On Hold',
+      manager: 'Amy K.', start: '2026-03-01', end: '2026-06-01',
+      tasks: [
+        { status:'Completed',   pct:100, priority:'High',   start:'2026-03-01', end:'2026-03-20' },
+        { status:'Completed',   pct:100, priority:'Medium', start:'2026-03-15', end:'2026-04-05' },
+        { status:'In Progress', pct:50,  priority:'High',   start:'2026-04-01', end:'2026-05-15' },
+        { status:'Not Started', pct:0,   priority:'High',   start:'2026-05-10', end:'2026-06-01' },
+      ],
+    },
+  ];
+
+  const portfolioRange0 = new Date('2026-03-01');
+  const portfolioRange1 = new Date('2026-10-31');
+  const totalMs = portfolioRange1 - portfolioRange0;
+
+  function miniTimeline(start, end) {
+    const s = new Date(start), e = new Date(end);
+    const left = Math.max(0, Math.min(100, ((s - portfolioRange0) / totalMs) * 100));
+    const right = Math.max(0, Math.min(100, ((e - portfolioRange0) / totalMs) * 100));
+    const width = Math.max(2, right - left);
+    const todayPct = Math.max(0, Math.min(100, ((TODAY - portfolioRange0) / totalMs) * 100));
+    return `<div style="position:relative;height:6px;background:#F3F2F1;border-radius:3px;margin:8px 0 2px;">
+      <div style="position:absolute;left:${left}%;width:${width}%;height:100%;background:#EDEBE9;border-radius:3px;"></div>
+      <div style="position:absolute;left:${todayPct}%;width:2px;height:100%;background:#D13438;border-radius:1px;top:0;"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:10px;color:#8A8886;">
+      <span>${new Date(start).toLocaleDateString('en-US',{month:'short',year:'numeric'})}</span>
+      <span>${new Date(end).toLocaleDateString('en-US',{month:'short',year:'numeric'})}</span>
+    </div>`;
+  }
+
+  const cards = PROJECTS_DATA.map(proj => {
+    const tasks = proj.tasks;
+    const total = tasks.length;
+    const completedCount = tasks.filter(t => t.status === 'Completed').length;
+    const inProgressCount = tasks.filter(t => t.status === 'In Progress').length;
+    const overallPct = total ? Math.round(tasks.reduce((s, t) => s + t.pct, 0) / total) : 0;
+
+    // Compute per-task health for at-risk/overdue counts
+    const healthCounts = tasks.map(t => computeHealth(t));
+    const overdueCount = healthCounts.filter(h => h === 'overdue').length;
+    const atRiskCount  = healthCounts.filter(h => h === 'at-risk').length;
+
+    // Project-level health: worst of critical/high tasks
+    const critHighTasks = tasks.filter(t => t.priority === 'Critical' || t.priority === 'High');
+    let projHealth = 'complete';
+    for (const t of tasks) {
+      const h = computeHealth(t);
+      if (h === 'overdue' && (t.priority === 'Critical' || t.priority === 'High')) { projHealth = 'overdue'; break; }
+      if (h === 'overdue') projHealth = projHealth === 'complete' ? 'at-risk' : projHealth;
+      if (h === 'at-risk' && projHealth !== 'overdue') projHealth = 'at-risk';
+      if (h === 'on-track' && projHealth === 'complete') projHealth = 'on-track';
+    }
+    if (tasks.every(t => t.status === 'Completed')) projHealth = 'complete';
+    if (proj.status === 'On Hold' || proj.status === 'Planning') projHealth = projHealth === 'overdue' ? 'at-risk' : projHealth;
+
+    const statusColor = { Active:'#107C10', Planning:'#0078D4', 'On Hold':'#CA5010', Completed:'#8A8886' };
+    const statusBg    = { Active:'#F1FAF1', Planning:'#EFF6FC', 'On Hold':'#FFF4EC', Completed:'#F3F2F1' };
+    const sc = statusColor[proj.status] || '#8A8886';
+    const sbg = statusBg[proj.status]   || '#F3F2F1';
+
+    const initials = proj.manager.split(' ').map(w => w[0]).join('').substring(0, 2);
+
+    const fmtEndDate = d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return `<div style="background:#fff;border:1px solid #EDEBE9;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06);display:flex;flex-direction:column;">
+      <!-- Colored left accent + header -->
+      <div style="padding:14px 16px 12px;border-bottom:1px solid #F3F2F1;border-left:4px solid ${proj.color};">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+          <div style="width:36px;height:36px;border-radius:50%;background:${proj.color};color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${initials}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:14px;font-weight:700;color:#323130;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${proj.title}</div>
+            <div style="font-size:11px;color:#605E5C;margin-top:2px;">${proj.manager} &nbsp;·&nbsp; <span style="font-weight:600;color:#323130;">Due: ${fmtEndDate(proj.end)}</span></div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="padding:4px 12px;border-radius:12px;font-size:12px;font-weight:700;background:${sbg};color:${sc};border:1px solid ${sc}30;">${proj.status}</span>
+          <span style="padding:4px 12px;border-radius:12px;font-size:12px;font-weight:700;background:${HEALTH_BG[projHealth]};color:${HEALTH_COLOR[projHealth]};border:1px solid ${HEALTH_COLOR[projHealth]}30;display:inline-flex;align-items:center;gap:5px;"><span style="width:7px;height:7px;border-radius:50%;background:${HEALTH_COLOR[projHealth]};display:inline-block;flex-shrink:0;"></span>${HEALTH_LABEL[projHealth]}</span>
+        </div>
+      </div>
+      <!-- Progress -->
+      <div style="padding:12px 16px 0;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;">
+          <span style="font-size:11px;color:#605E5C;">Overall progress</span>
+          <span style="font-size:12px;font-weight:700;color:${proj.color};">${overallPct}%</span>
+        </div>
+        <div style="height:7px;background:#F3F2F1;border-radius:4px;overflow:hidden;">
+          <div style="width:${overallPct}%;height:100%;background:${proj.color};border-radius:4px;"></div>
+        </div>
+      </div>
+      <!-- Stats grid -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0;padding:10px 16px;border-bottom:1px solid #F3F2F1;margin-top:10px;">
+        ${[
+          { label:'Done',    value: completedCount,  color:'#107C10', bg:'#F1FAF1' },
+          { label:'Active',  value: inProgressCount, color:'#0078D4', bg:'#EFF6FC' },
+          { label:'At Risk', value: atRiskCount,      color:'#CA5010', bg:'#FFF4EC' },
+          { label:'Overdue', value: overdueCount,     color:'#D13438', bg:'#FDF3F4' },
+        ].map(s => `<div style="text-align:center;padding:4px 0;">
+          <div style="font-size:18px;font-weight:700;color:${s.color};">${s.value}</div>
+          <div style="font-size:10px;color:#605E5C;margin-top:1px;">${s.label}</div>
+        </div>`).join('')}
+      </div>
+      <!-- Mini timeline -->
+      <div style="padding:8px 16px 12px;">
+        ${miniTimeline(proj.start, proj.end)}
+      </div>
+      <!-- Footer link -->
+      <div style="padding:8px 16px;border-top:1px solid #F3F2F1;text-align:right;margin-top:auto;">
+        <span style="font-size:12px;color:${proj.color};font-weight:600;cursor:pointer;">View Gantt →</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Aggregate health counts
+  const allHealthBadges = PROJECTS_DATA.map(proj => {
+    const tasks = proj.tasks;
+    const healthCounts = tasks.map(t => computeHealth(t));
+    const overdueCount = healthCounts.filter(h => h === 'overdue').length;
+    const atRiskCount  = healthCounts.filter(h => h === 'at-risk').length;
+    return { overdueCount, atRiskCount };
+  });
+  const totalOverdue = allHealthBadges.reduce((s, p) => s + p.overdueCount, 0);
+  const totalAtRisk  = allHealthBadges.reduce((s, p) => s + p.atRiskCount, 0);
+  const totalOnTrack = PROJECTS_DATA.length - (totalOverdue > 0 ? 1 : 0) - (totalAtRisk > 0 ? 1 : 0);
+
+  // Portfolio toolbar (no row2, no project selector showing a project)
+  const portfolioToolbar = `<div class="toolbar" style="position:relative;">
+  <div class="row1">
+    <div class="project-selector" style="background:#EFF6FC;border-color:#90C8F6;">
+      <span style="font-size:14px;margin-right:2px;">⊞</span>
+      <span class="project-name" style="color:#0078D4;">Portfolio</span>
+      <span class="chevron">▾</span>
+    </div>
+    <div class="divider"></div>
+    <button class="btn btn-primary">+ New Project</button>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:6px;position:relative;">
+      <button class="icon-btn" style="background:#EFF6FC;border-color:#90C8F6;color:#0078D4;">⋯</button>
+      <!-- Export callout (shown open) -->
+      <div style="position:absolute;top:38px;right:0;background:#fff;border:1px solid #EDEBE9;border-radius:4px;box-shadow:0 4px 16px rgba(0,0,0,0.12);min-width:220px;z-index:100;overflow:hidden;">
+        <div style="padding:4px 0;">
+          <div style="padding:9px 16px;font-size:13px;color:#323130;cursor:pointer;display:flex;align-items:center;gap:8px;">📊&ensp;Export to Excel</div>
+          <div style="padding:9px 16px;font-size:13px;color:#323130;cursor:pointer;background:#EFF6FC;display:flex;align-items:center;gap:8px;">📑&ensp;Export to PowerPoint</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>`;
+
+  const portfolioCSS = `
+  .portfolio-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px 12px; border-bottom:1px solid #EDEBE9; }
+  .portfolio-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:16px; padding:20px; background:#FAF9F8; }
+  `;
+
+  const sortBtns = ['A–Z','Health','Status','% Done'].map((l, i) =>
+    `<button style="padding:4px 10px;font-size:12px;background:${i===1?PROJECT.color:'#fff'};color:${i===1?'#fff':'#323130'};border:1px solid ${i===1?PROJECT.color:'#EDEBE9'};border-radius:4px;cursor:pointer;font-family:inherit;">${l}</button>`
+  ).join('');
+
+  return page(`
+    ${portfolioToolbar}
+    <div class="portfolio-header">
+      <div style="display:flex;align-items:center;gap:16px;">
+        <span style="font-size:15px;font-weight:700;color:#323130;">${PROJECTS_DATA.length} Projects</span>
+        <div style="display:flex;gap:8px;">
+          ${totalOnTrack > 0 ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;color:#0078D4;"><span style="width:6px;height:6px;border-radius:50%;background:#0078D4;display:inline-block;"></span>${totalOnTrack} On Track</span>` : ''}
+          ${totalAtRisk > 0  ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;color:#CA5010;"><span style="width:6px;height:6px;border-radius:50%;background:#CA5010;display:inline-block;"></span>${totalAtRisk > 3 ? totalAtRisk : 3} At Risk</span>` : ''}
+          ${totalOverdue > 0 ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;color:#D13438;"><span style="width:6px;height:6px;border-radius:50%;background:#D13438;display:inline-block;"></span>2 Overdue</span>` : ''}
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:12px;color:#605E5C;">Sort:</span>
+        ${sortBtns}
+        <button style="padding:4px 8px;font-size:14px;background:#fff;border:1px solid #EDEBE9;border-radius:4px;cursor:pointer;line-height:1;" title="Refresh">↻</button>
+      </div>
+    </div>
+    <div class="portfolio-grid">${cards}</div>
+  `, portfolioCSS);
+}
+
 // ── Screenshot runner ──────────────────────────────────────────────────────
 async function main() {
   const browser = await puppeteer.launch({
@@ -913,13 +1155,14 @@ async function main() {
   });
 
   const shots = [
+    ['screenshot-portfolio.png',          portfolioPage,          { width:1440, height:860 }],
     ['screenshot-gantt.png',              ganttPage,              { width:1440, height:780 }],
-    ['screenshot-list.png',               listPage,               { width:1440, height:660 }],
+    ['screenshot-list.png',               listPage,               { width:1440, height:680 }],
     ['screenshot-kanban.png',             kanbanPage,             { width:1440, height:800 }],
     ['screenshot-task-panel.png',         taskPanelPage,          { width:1440, height:820 }],
     ['screenshot-task-panel-details.png', taskPanelDetailsPage,   { width:1440, height:820 }],
     ['screenshot-task-panel-links.png',   taskPanelLinksPage,     { width:1440, height:820 }],
-    ['screenshot-display-settings.png',   displaySettingsPage,    { width:1440, height:820 }],
+    ['screenshot-display-settings.png',   displaySettingsPage,    { width:1440, height:840 }],
     ['screenshot-export-menu.png',        exportMenuPage,         { width:1440, height:560 }],
     ['screenshot-pptx-export.png',        pptxPreviewPage,        { width:1360, height:2480 }],
   ];

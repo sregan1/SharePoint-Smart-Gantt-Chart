@@ -4,7 +4,8 @@ import '@pnp/sp/lists';
 import '@pnp/sp/items';
 import '@pnp/sp/fields';
 import '@pnp/sp/views';
-import { IProject, ITask, ProjectStatus, TaskPriority, TaskStatus } from '../models';
+import { IProject, ITask, IProjectTaskStats, ProjectStatus, TaskPriority, TaskStatus } from '../models';
+import { computeTaskHealth, computeProjectHealth } from '../utils/healthUtils';
 
 const PROJECTS_LIST = 'SmartGantt_Projects';
 
@@ -28,6 +29,8 @@ export class SharePointService {
   async ensureProjectsList(): Promise<void> {
     try {
       await this.sp.web.lists.getByTitle(PROJECTS_LIST)();
+      // List exists — add IsArchived if missing (migration for deployments before v1.2)
+      await this._ensureIsArchivedField();
     } catch {
       await this.sp.web.lists.add(PROJECTS_LIST, 'Smart Gantt — project registry', 100, false);
       const list = this.sp.web.lists.getByTitle(PROJECTS_LIST);
@@ -41,7 +44,17 @@ export class SharePointService {
       });
       await list.fields.addText('ProjectManager', { MaxLength: 255 });
       await list.fields.addText('ProjectManagerEmail', { MaxLength: 255 });
+      await list.fields.add('IsArchived', 8, {});
       await this._setupMetaListView();
+    }
+  }
+
+  private async _ensureIsArchivedField(): Promise<void> {
+    const list = this.sp.web.lists.getByTitle(PROJECTS_LIST);
+    try {
+      await list.fields.getByInternalNameOrTitle('IsArchived')();
+    } catch {
+      await list.fields.add('IsArchived', 8, {});
     }
   }
 
@@ -52,9 +65,9 @@ export class SharePointService {
       .items.select(
         'Id', 'Title', 'ProjectListName', 'ProjectDescription', 'ProjectColor',
         'ProjectStartDate', 'ProjectDueDate', 'ProjectStatus', 'ProjectManager',
-        'ProjectManagerEmail', 'Created'
+        'ProjectManagerEmail', 'Created', 'IsArchived'
       )
-      .orderBy('Created', true)
+      .orderBy('Title', true)
       .top(500)();
 
     return items.map(item => ({
@@ -69,6 +82,7 @@ export class SharePointService {
       projectManager: item.ProjectManager || '',
       projectManagerEmail: item.ProjectManagerEmail || '',
       created: item.Created,
+      isArchived: item.IsArchived === true,
     }));
   }
 
@@ -120,13 +134,22 @@ export class SharePointService {
     if (data.startDate !== undefined) updates.ProjectStartDate = toSPDate(data.startDate);
     if (data.dueDate !== undefined) updates.ProjectDueDate = toSPDate(data.dueDate);
     if (data.status !== undefined) updates.ProjectStatus = data.status;
+    if (data.isArchived !== undefined) updates.IsArchived = data.isArchived;
     await this.sp.web.lists.getByTitle(PROJECTS_LIST).items.getById(id).update(updates);
   }
 
+  async archiveProject(id: number): Promise<void> {
+    await this.sp.web.lists.getByTitle(PROJECTS_LIST).items.getById(id).update({ IsArchived: true });
+  }
+
+  async unarchiveProject(id: number): Promise<void> {
+    await this.sp.web.lists.getByTitle(PROJECTS_LIST).items.getById(id).update({ IsArchived: false });
+  }
+
   async deleteProject(id: number, listName: string): Promise<void> {
-    await this.sp.web.lists.getByTitle(PROJECTS_LIST).items.getById(id).delete();
+    await this.sp.web.lists.getByTitle(PROJECTS_LIST).items.getById(id).recycle();
     try {
-      await this.sp.web.lists.getByTitle(listName).delete();
+      await this.sp.web.lists.getByTitle(listName).recycle();
     } catch {
       // list may not exist; ignore
     }
@@ -219,6 +242,94 @@ export class SharePointService {
     } catch {
       return [];
     }
+  }
+
+  async getProjectTaskStats(project: IProject): Promise<IProjectTaskStats> {
+    const empty: IProjectTaskStats = {
+      listName: project.listName,
+      totalTasks: 0,
+      byStatus: { 'Not Started': 0, 'In Progress': 0, 'Completed': 0, 'On Hold': 0, 'Cancelled': 0 },
+      overallPct: 0,
+      health: 'on-track',
+      overdueCount: 0,
+      atRiskCount: 0,
+      inProgressCount: 0,
+      completedCount: 0,
+      milestoneCount: 0,
+      earliestStart: project.startDate || '',
+      latestDue: project.dueDate || '',
+    };
+
+    try {
+      const items = await this.sp.web.lists
+        .getByTitle(project.listName)
+        .items.select('Status', 'Priority', 'PercentComplete', 'StartDate', 'DueDate', 'IsMilestone')
+        .top(1000)();
+
+      if (items.length === 0) return empty;
+
+      const tasks: ITask[] = items.map(item => ({
+        id: 0,
+        title: '',
+        description: '',
+        startDate: item.StartDate || '',
+        dueDate: item.DueDate || '',
+        status: (item.Status || 'Not Started') as TaskStatus,
+        priority: (item.Priority || 'Medium') as TaskPriority,
+        assignedTo: '', assignedToEmail: '',
+        percentComplete: item.PercentComplete || 0,
+        parentTaskId: null, dependencies: [], notes: '', color: '',
+        sortOrder: 0,
+        isMilestone: item.IsMilestone === true || item.IsMilestone === 1,
+        phase: '', created: '', modified: '',
+      }));
+
+      const today = new Date();
+      const byStatus = { 'Not Started': 0, 'In Progress': 0, 'Completed': 0, 'On Hold': 0, 'Cancelled': 0 } as Record<TaskStatus, number>;
+      let totalPct = 0;
+      let overdueCount = 0;
+      let atRiskCount = 0;
+      let milestoneCount = 0;
+      const starts: Date[] = [];
+      const ends: Date[] = [];
+
+      for (const task of tasks) {
+        byStatus[task.status] = (byStatus[task.status] || 0) + 1;
+        totalPct += task.percentComplete;
+        if (task.isMilestone) milestoneCount++;
+        if (task.startDate) starts.push(new Date(task.startDate));
+        if (task.dueDate) ends.push(new Date(task.dueDate));
+        const h = computeTaskHealth(task, today);
+        if (h === 'overdue') overdueCount++;
+        if (h === 'at-risk') atRiskCount++;
+      }
+
+      return {
+        listName: project.listName,
+        totalTasks: tasks.length,
+        byStatus,
+        overallPct: Math.round(totalPct / tasks.length),
+        health: computeProjectHealth(tasks, project, today),
+        overdueCount,
+        atRiskCount,
+        inProgressCount: byStatus['In Progress'],
+        completedCount: byStatus['Completed'],
+        milestoneCount,
+        earliestStart: starts.length ? starts.reduce((a, b) => a < b ? a : b).toISOString() : project.startDate || '',
+        latestDue: ends.length ? ends.reduce((a, b) => a > b ? a : b).toISOString() : project.dueDate || '',
+      };
+    } catch {
+      return empty;
+    }
+  }
+
+  async getAllProjectStats(projects: IProject[]): Promise<Map<number, IProjectTaskStats>> {
+    const results = await Promise.all(
+      projects.map(p => this.getProjectTaskStats(p).then(stats => ({ id: p.id, stats })))
+    );
+    const map = new Map<number, IProjectTaskStats>();
+    results.forEach(r => map.set(r.id, r.stats));
+    return map;
   }
 
   async createTask(listName: string, task: Partial<ITask>): Promise<ITask> {

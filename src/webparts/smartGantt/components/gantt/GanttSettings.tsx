@@ -24,6 +24,7 @@ export const GanttSettings: React.FC<IGanttSettingsProps> = ({
     { id: 'status',   label: 'By Status',   icon: '⬛' },
     { id: 'priority', label: 'By Priority', icon: '🔺' },
     { id: 'phase',    label: 'By Phase',    icon: '🏷' },
+    { id: 'health',   label: 'By Health',   icon: '❤' },
   ];
 
   const weekOptions: { id: GanttWeekLabel; label: string; desc: string }[] = [
@@ -164,6 +165,7 @@ export const GanttSettings: React.FC<IGanttSettingsProps> = ({
             ['showDependencies', 'Dependency arrows'],
             ['showProgressText', 'Progress % on bars'],
             ['showAssignee',     'Assignee name on bars'],
+            ['showHealthBadges', 'Health status badges'],
           ] as const).map(([key, label]) => (
             <div key={key} className={styles.toggleRow}>
               <span className={styles.toggleLabel}>{label}</span>

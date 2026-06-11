@@ -2,13 +2,16 @@ import * as React from 'react';
 import {
   addDays, addMonths, addWeeks, differenceInCalendarDays,
   endOfMonth, format, isWeekend, max, min,
-  startOfMonth, startOfWeek, startOfDay, getISOWeek,
+  startOfMonth, startOfWeek, getISOWeek,
 } from 'date-fns';
 import {
   IProject, ITask, ZoomLevel, STATUS_COLORS, PRIORITY_COLORS,
   IGanttDisplaySettings, DEFAULT_GANTT_SETTINGS, HEADER_THEME_COLORS, phaseColor,
 } from '../../models';
-import { computeTaskHealth, healthColor } from '../../utils/healthUtils';
+import {
+  computeTaskHealth, healthColor, computeCriticalPath, hasDependencyViolation,
+} from '../../utils/healthUtils';
+import { parseDateOnly, formatDateOnly, dateToDateOnlyString, todayLocalMidnight } from '../../utils/dateUtils';
 import { HealthBadge } from '../common/HealthBadge';
 import styles from './GanttChart.module.scss';
 
@@ -22,11 +25,14 @@ interface IGanttChartProps {
   onDeleteTask: (id: number) => void;
   onTaskUpdate: (id: number, updates: Partial<ITask>) => void;
   onAddTask: () => void;
+  onImport?: () => void;
 }
+
+type DragMode = 'move' | 'resize-start' | 'resize-end';
 
 interface IDragState {
   taskId: number;
-  mode: 'move' | 'resize';
+  mode: DragMode;
   startClientX: number;
   origStartDate: Date;
   origEndDate: Date;
@@ -38,10 +44,8 @@ interface ITooltip {
   task: ITask;
 }
 
-const ROW_H = 40;
 const HEADER_HEIGHT = 56;
 const BAR_HEIGHT = 26;
-const BAR_OFFSET = (ROW_H - BAR_HEIGHT) / 2;
 const MILESTONE_SIZE = 12;
 const MIN_BAR_WIDTH = 6;
 
@@ -54,21 +58,9 @@ const DAY_WIDTH: Record<ZoomLevel, number> = {
 
 const BUFFER_DAYS = 30;
 
-function parseDate(s: string): Date | null {
-  if (!s) return null;
-  const d = new Date(s);
-  return isNaN(d.getTime()) ? null : startOfDay(d);
-}
-
-function formatDate(s: string): string {
-  if (!s) return '—';
-  const d = parseDate(s);
-  return d ? format(d, 'MMM d, yyyy') : '—';
-}
-
 function taskDuration(task: ITask): number {
-  const s = parseDate(task.startDate);
-  const e = parseDate(task.dueDate);
+  const s = parseDateOnly(task.startDate);
+  const e = parseDateOnly(task.dueDate);
   if (!s || !e) return 0;
   return Math.max(1, differenceInCalendarDays(e, s) + 1);
 }
@@ -88,6 +80,8 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
+let ganttInstanceCounter = 0;
+
 export const GanttChart: React.FC<IGanttChartProps> = ({
   tasks,
   project,
@@ -98,13 +92,24 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
   onDeleteTask,
   onTaskUpdate,
   onAddTask,
+  onImport,
 }) => {
   const bodyScrollRef = React.useRef<HTMLDivElement>(null);
   const headerScrollRef = React.useRef<HTMLDivElement>(null);
   const leftBodyRef = React.useRef<HTMLDivElement>(null);
 
+  // Unique per-instance prefix so SVG defs (gradients, markers) don't collide
+  // when two Smart Gantt web parts render on the same page.
+  const uid = React.useRef(`sg${++ganttInstanceCounter}`).current;
+
   const [dragState, setDragState] = React.useState<IDragState | null>(null);
   const [dragOffsets, setDragOffsets] = React.useState<Map<number, { start: Date; end: Date }>>(new Map());
+  // Live mirror of dragOffsets so the mousemove/mouseup listeners don't need
+  // re-registering on every state change.
+  const dragOffsetsRef = React.useRef(dragOffsets);
+  // Set after a real drag so the click that the browser fires on mouseup
+  // doesn't also open the edit panel.
+  const suppressClickRef = React.useRef(false);
   const [tooltip, setTooltip] = React.useState<ITooltip | null>(null);
   const [collapsedPhases, setCollapsedPhases] = React.useState<Set<string>>(new Set());
   // Tracks whether the previous render had scrollToToday=true, so the
@@ -113,17 +118,28 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
   const prevScrollToToday = React.useRef(false);
 
   const dayWidth = DAY_WIDTH[zoomLevel];
-  const today = startOfDay(new Date());
+  const today = todayLocalMidnight();
   const ROW_H = settings.rowHeight;
   const theme = HEADER_THEME_COLORS[settings.headerTheme];
 
   // For project-relative week numbers: find earliest task start
   const projectWeekStart = React.useMemo(() => {
     const earliest = tasks.reduce<Date | null>((acc, t) => {
-      const s = parseDate(t.startDate);
+      const s = parseDateOnly(t.startDate);
       return s && (!acc || s < acc) ? s : acc;
     }, null);
     return startOfWeek(earliest || today, { weekStartsOn: 1 });
+  }, [tasks]);
+
+  const criticalIds = React.useMemo(
+    () => (settings.showCriticalPath ? computeCriticalPath(tasks) : new Set<number>()),
+    [tasks, settings.showCriticalPath]
+  );
+
+  const violationIds = React.useMemo(() => {
+    const set = new Set<number>();
+    tasks.forEach(t => { if (hasDependencyViolation(t, tasks)) set.add(t.id); });
+    return set;
   }, [tasks]);
 
   const getWeekLabel = (weekDate: Date): string => {
@@ -140,15 +156,15 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
   const { rangeStart, rangeEnd } = React.useMemo(() => {
     const dates: Date[] = [addDays(today, -BUFFER_DAYS)];
     tasks.forEach(t => {
-      const s = parseDate(t.startDate);
-      const e = parseDate(t.dueDate);
+      const s = parseDateOnly(t.startDate);
+      const e = parseDateOnly(t.dueDate);
       if (s) dates.push(addDays(s, -BUFFER_DAYS));
       if (e) dates.push(addDays(e, BUFFER_DAYS));
     });
     const earliest = startOfMonth(dates.reduce((a, b) => (a < b ? a : b), today));
     const latest = endOfMonth(dates.reduce((a, b) => (a > b ? a : b), today));
     return { rangeStart: earliest, rangeEnd: latest };
-  }, [tasks, today]);
+  }, [tasks, today.getTime()]);
 
   const totalDays = differenceInCalendarDays(rangeEnd, rangeStart) + 1;
   const svgWidth = totalDays * dayWidth;
@@ -158,8 +174,6 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
   // Convert date ↔ x
   const dateToX = (d: Date): number =>
     differenceInCalendarDays(d, rangeStart) * dayWidth;
-
-  const _xToDate = (x: number): Date => addDays(rangeStart, Math.round(x / dayWidth));
 
   // Scroll on load, zoom change, or ◉ Today button.
   // On load/range change: scroll to the earliest task so past tasks are visible.
@@ -178,7 +192,7 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
     } else {
       // Find the earliest task start date
       const earliest = tasks.reduce<Date | null>((acc, t) => {
-        const s = parseDate(t.startDate);
+        const s = parseDateOnly(t.startDate);
         return s && (!acc || s < acc) ? s : acc;
       }, null);
       // If the earliest task is more than a week in the past, show it with
@@ -212,12 +226,14 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
   const handleBarMouseDown = (
     e: React.MouseEvent,
     task: ITask,
-    mode: 'move' | 'resize'
+    mode: DragMode
   ): void => {
     e.preventDefault();
     e.stopPropagation();
-    const s = parseDate(task.startDate) || today;
-    const end = parseDate(task.dueDate) || today;
+    suppressClickRef.current = false;
+    setTooltip(null);
+    const s = parseDateOnly(task.startDate) || today;
+    const end = parseDateOnly(task.dueDate) || today;
     setDragState({
       taskId: task.id,
       mode,
@@ -232,15 +248,18 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
 
     const handleMouseMove = (e: MouseEvent): void => {
       const dx = e.clientX - dragState.startClientX;
+      if (Math.abs(dx) > 3) suppressClickRef.current = true;
       const deltaDays = Math.round(dx / dayWidth);
-      const newMap = new Map(dragOffsets);
+      const newMap = new Map(dragOffsetsRef.current);
 
-      if (dragState.mode === 'move') {
+      if (deltaDays === 0) {
+        newMap.delete(dragState.taskId);
+      } else if (dragState.mode === 'move') {
         newMap.set(dragState.taskId, {
           start: addDays(dragState.origStartDate, deltaDays),
           end: addDays(dragState.origEndDate, deltaDays),
         });
-      } else {
+      } else if (dragState.mode === 'resize-end') {
         const newEnd = addDays(dragState.origEndDate, deltaDays);
         if (differenceInCalendarDays(newEnd, dragState.origStartDate) >= 0) {
           newMap.set(dragState.taskId, {
@@ -248,19 +267,31 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
             end: newEnd,
           });
         }
+      } else {
+        // resize-start
+        const newStart = addDays(dragState.origStartDate, deltaDays);
+        if (differenceInCalendarDays(dragState.origEndDate, newStart) >= 0) {
+          newMap.set(dragState.taskId, {
+            start: newStart,
+            end: dragState.origEndDate,
+          });
+        }
       }
+      dragOffsetsRef.current = newMap;
       setDragOffsets(newMap);
     };
 
     const handleMouseUp = (): void => {
-      const offset = dragOffsets.get(dragState.taskId);
+      const offset = dragOffsetsRef.current.get(dragState.taskId);
       if (offset) {
+        suppressClickRef.current = true;
         onTaskUpdate(dragState.taskId, {
-          startDate: offset.start.toISOString(),
-          dueDate: offset.end.toISOString(),
+          startDate: dateToDateOnlyString(offset.start),
+          dueDate: dateToDateOnlyString(offset.end),
         });
       }
       setDragState(null);
+      dragOffsetsRef.current = new Map();
       setDragOffsets(new Map());
     };
 
@@ -270,7 +301,15 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [dragState, dragOffsets, dayWidth]);
+  }, [dragState, dayWidth]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleBarClick = (task: ITask): void => {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
+    onEditTask(task);
+  };
 
   // ─── Header generation ─────────────────────────────────────────────────
 
@@ -313,7 +352,7 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
       // Month bands (for month / quarter zoom)
       return monthBands.map(b => ({ ...b, isCurrentWeek: false }));
     }
-  }, [rangeStart, rangeEnd, dayWidth, zoomLevel, monthBands]);
+  }, [rangeStart, rangeEnd, dayWidth, zoomLevel, monthBands, settings.weekLabel, projectWeekStart]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Day tick marks (only in day zoom)
   const dayTicks = React.useMemo(() => {
@@ -330,7 +369,7 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
       cur = addDays(cur, 1);
     }
     return ticks;
-  }, [rangeStart, rangeEnd, dayWidth, zoomLevel]);
+  }, [rangeStart, rangeEnd, dayWidth, zoomLevel]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Weekend columns (for body)
   const weekendCols = React.useMemo(() => {
@@ -344,17 +383,19 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
       cur = addDays(cur, 1);
     }
     return cols;
-  }, [rangeStart, rangeEnd, dayWidth, zoomLevel]);
+  }, [rangeStart, rangeEnd, dayWidth, zoomLevel, settings.showWeekends]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Today x
   const todayX = dateToX(today) + dayWidth / 2;
 
   // ─── Render helpers ────────────────────────────────────────────────────
 
+  const BAR_OFFSET = (ROW_H - BAR_HEIGHT) / 2;
+
   const renderTaskBar = (task: ITask, rowIndex: number): React.ReactNode => {
     const offset = dragOffsets.get(task.id);
-    const sDate = offset ? offset.start : (parseDate(task.startDate) || today);
-    const eDate = offset ? offset.end : (parseDate(task.dueDate) || today);
+    const sDate = offset ? offset.start : (parseDateOnly(task.startDate) || today);
+    const eDate = offset ? offset.end : (parseDateOnly(task.dueDate) || today);
 
     const x = dateToX(sDate);
     const barWidth = Math.max(
@@ -364,6 +405,7 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
     const y = rowIndex * ROW_H + BAR_OFFSET;
     const color = getTaskColor(task, settings);
     const progressWidth = barWidth * (task.percentComplete / 100);
+    const isCritical = criticalIds.has(task.id);
 
     if (task.isMilestone) {
       const mx = dateToX(sDate) + dayWidth / 2;
@@ -379,14 +421,14 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
           <polygon
             points={`${mx},${my - MILESTONE_SIZE} ${mx + MILESTONE_SIZE},${my} ${mx},${my + MILESTONE_SIZE} ${mx - MILESTONE_SIZE},${my}`}
             fill={color}
-            stroke="white"
+            stroke={isCritical ? '#D13438' : 'white'}
             strokeWidth="1.5"
           />
         </g>
       );
     }
 
-    const gradientId = `grad-${task.id}`;
+    const gradientId = `${uid}-grad-${task.id}`;
     return (
       <g key={`bar-${task.id}`} className={styles.taskBarGroup}>
         <defs>
@@ -403,9 +445,12 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
           height={BAR_HEIGHT}
           rx={4}
           fill={hexToRgba(color, 0.18)}
+          stroke={isCritical ? '#D13438' : undefined}
+          strokeWidth={isCritical ? 1.5 : undefined}
+          strokeDasharray={isCritical ? '4,2' : undefined}
           className={styles.taskBar}
           onMouseDown={e => handleBarMouseDown(e, task, 'move')}
-          onClick={() => onEditTask(task)}
+          onClick={() => handleBarClick(task)}
           onMouseEnter={e => setTooltip({ x: e.clientX, y: e.clientY, task })}
           onMouseLeave={() => setTooltip(null)}
           style={{ cursor: dragState ? 'grabbing' : 'grab' }}
@@ -415,18 +460,15 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
           <rect
             x={x}
             y={y}
-            width={progressWidth}
+            width={Math.min(progressWidth, barWidth)}
             height={BAR_HEIGHT}
             rx={4}
             fill={`url(#${gradientId})`}
             pointerEvents="none"
-            style={{
-              clipPath: barWidth > 8 ? undefined : undefined,
-            }}
           />
         )}
-        {/* Text label */}
-        {barWidth > 50 && (
+        {/* Progress label */}
+        {settings.showProgressText && barWidth > 50 && task.percentComplete > 0 && (
           <text
             x={x + 8}
             y={y + BAR_HEIGHT / 2 + 4}
@@ -437,10 +479,36 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
             pointerEvents="none"
             style={{ userSelect: 'none' }}
           >
-            {task.percentComplete > 0 ? `${task.percentComplete}%` : ''}
+            {`${task.percentComplete}%`}
           </text>
         )}
-        {/* Resize handle */}
+        {/* Assignee label next to the bar */}
+        {settings.showAssignee && task.assignedTo && (
+          <text
+            x={x + barWidth + 8}
+            y={y + BAR_HEIGHT / 2 + 4}
+            fontSize={11}
+            fontFamily="'Segoe UI', sans-serif"
+            fill="#605E5C"
+            pointerEvents="none"
+            style={{ userSelect: 'none' }}
+          >
+            {task.assignedTo}
+          </text>
+        )}
+        {/* Resize handles */}
+        <rect
+          x={x}
+          y={y}
+          width={8}
+          height={BAR_HEIGHT}
+          rx={4}
+          fill={color}
+          opacity={0.5}
+          className={styles.taskBarResizeHandle}
+          onMouseDown={e => handleBarMouseDown(e, task, 'resize-start')}
+          style={{ cursor: 'ew-resize' }}
+        />
         <rect
           x={x + barWidth - 8}
           y={y}
@@ -450,7 +518,7 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
           fill={color}
           opacity={0.5}
           className={styles.taskBarResizeHandle}
-          onMouseDown={e => handleBarMouseDown(e, task, 'resize')}
+          onMouseDown={e => handleBarMouseDown(e, task, 'resize-end')}
           style={{ cursor: 'ew-resize' }}
         />
       </g>
@@ -458,32 +526,46 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
   };
 
   const renderDependencyArrows = (): React.ReactNode => {
-    const taskMap = new Map(tasks.map(t => [t.id, t]));
-    const arrows: React.ReactNode[] = [];
+    const taskById = new Map(tasks.map(t => [t.id, t]));
+    // Row positions must come from the *visible* rows (phase headers shift and
+    // reorder everything), not from the raw tasks array.
+    const rowIndexById = new Map<number, number>();
+    visibleTasks.forEach((row, i) => {
+      if (row.type === 'task' && row.task) rowIndexById.set(row.task.id, i);
+    });
 
-    tasks.forEach((task, rowIndex) => {
+    const arrows: React.ReactNode[] = [];
+    visibleTasks.forEach((row, rowIndex) => {
+      if (row.type !== 'task' || !row.task) return;
+      const task = row.task;
       task.dependencies.forEach(depId => {
-        const dep = taskMap.get(depId);
+        const dep = taskById.get(depId);
         if (!dep) return;
-        const depIndex = visibleTasks.findIndex(r => r.type === 'task' && r.task?.id === depId);
-        if (depIndex < 0) return;
+        const depIndex = rowIndexById.get(depId);
+        if (depIndex === undefined) return; // hidden (collapsed phase)
 
         const offset = dragOffsets.get(dep.id);
-        const depEnd = offset ? offset.end : (parseDate(dep.dueDate) || today);
+        const depEnd = offset ? offset.end : (parseDateOnly(dep.dueDate) || today);
         const offset2 = dragOffsets.get(task.id);
-        const taskStart = offset2 ? offset2.start : (parseDate(task.startDate) || today);
+        const taskStart = offset2 ? offset2.start : (parseDateOnly(task.startDate) || today);
 
         const fromX = dateToX(depEnd) + dayWidth;
         const fromY = depIndex * ROW_H + ROW_H / 2;
         const toX = dateToX(taskStart);
         const toY = rowIndex * ROW_H + ROW_H / 2;
         const midX = fromX + (toX - fromX) / 2;
+        const isCritical = criticalIds.has(task.id) && criticalIds.has(depId);
 
         arrows.push(
           <path
             key={`dep-${dep.id}-${task.id}`}
             d={`M ${fromX} ${fromY} C ${midX} ${fromY}, ${midX} ${toY}, ${toX} ${toY}`}
             className={styles.dependencyArrow}
+            style={{
+              markerEnd: `url(#${uid}-arrow${isCritical ? '-crit' : ''})`,
+              stroke: isCritical ? '#D13438' : undefined,
+              strokeWidth: isCritical ? 2 : undefined,
+            }}
           />
         );
       });
@@ -505,6 +587,8 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
           >
             <button
               className={styles.taskExpandBtn}
+              aria-label={`${isCollapsed ? 'Expand' : 'Collapse'} phase ${row.phase}`}
+              aria-expanded={!isCollapsed}
               onClick={() => {
                 setCollapsedPhases(prev => {
                   const next = new Set(prev);
@@ -521,8 +605,9 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
       }
 
       const task = row.task!;
-      const isChild = !!task.parentTaskId;
+      const isChild = row.isChild;
       const dur = taskDuration(task);
+      const hasViolation = violationIds.has(task.id);
       return (
         <div
           key={`row-${task.id}`}
@@ -536,12 +621,21 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
           />
           {task.isMilestone && <span className={styles.milestoneIcon}>◆</span>}
           <span className={styles.taskName} title={task.title}>{task.title}</span>
+          {hasViolation && (
+            <span
+              title="Started before all dependencies were completed"
+              style={{ color: '#CA5010', fontSize: 12, flexShrink: 0 }}
+            >
+              ⚠
+            </span>
+          )}
           <span className={styles.taskDuration}>{dur > 0 ? `${dur}d` : '—'}</span>
           <div className={styles.taskRowActions}>
             <button
               className={styles.taskActionBtn}
               onClick={e => { e.stopPropagation(); onEditTask(task); }}
               title="Edit"
+              aria-label={`Edit task ${task.title}`}
             >
               ✏
             </button>
@@ -549,6 +643,7 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
               className={`${styles.taskActionBtn} ${styles.deleteBtn}`}
               onClick={e => { e.stopPropagation(); onDeleteTask(task.id); }}
               title="Delete"
+              aria-label={`Delete task ${task.title}`}
             >
               ✕
             </button>
@@ -569,15 +664,28 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
           <div style={{ fontSize: 14, color: '#605E5C' }}>
             Add tasks to see them on the Gantt chart.
           </div>
-          <button
-            style={{
-              background: '#0078D4', color: '#fff', border: 'none', borderRadius: 4,
-              padding: '8px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer',
-            }}
-            onClick={onAddTask}
-          >
-            + Add First Task
-          </button>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button
+              style={{
+                background: '#0078D4', color: '#fff', border: 'none', borderRadius: 4,
+                padding: '8px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+              }}
+              onClick={onAddTask}
+            >
+              + Add First Task
+            </button>
+            {onImport && (
+              <button
+                style={{
+                  background: '#fff', color: '#0078D4', border: '1px solid #0078D4', borderRadius: 4,
+                  padding: '8px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                }}
+                onClick={onImport}
+              >
+                📥 Import Tasks
+              </button>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -620,7 +728,7 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
           <div className={styles.timelineHeaderScroll} ref={headerScrollRef}>
             <svg width={svgWidth} height={HEADER_HEIGHT} style={{ display: 'block', background: theme.bg }}>
               {/* Month row */}
-              {(zoomLevel === 'month' || zoomLevel === 'quarter' ? monthBands : monthBands).map((band, i) => (
+              {monthBands.map((band, i) => (
                 <g key={`month-${i}`}>
                   <rect
                     x={band.x}
@@ -719,8 +827,11 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
               onMouseLeave={() => setTooltip(null)}
             >
               <defs>
-                <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                <marker id={`${uid}-arrow`} markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
                   <polygon points="0 0, 8 3, 0 6" fill="#8A8886" />
+                </marker>
+                <marker id={`${uid}-arrow-crit`} markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                  <polygon points="0 0, 8 3, 0 6" fill="#D13438" />
                 </marker>
               </defs>
 
@@ -768,14 +879,14 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
                 fill="rgba(255, 100, 100, 0.04)"
               />
 
+              {/* Dependency arrows behind the bars */}
+              {settings.showDependencies && renderDependencyArrows()}
+
               {/* Task bars */}
               {visibleTasks.map((row, i) => {
                 if (row.type !== 'task' || !row.task) return null;
                 return renderTaskBar(row.task, i);
               })}
-
-              {/* Dependency arrows */}
-              {renderDependencyArrows()}
 
               {/* Today line */}
               <line
@@ -795,7 +906,7 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
       </div>
 
       {/* Tooltip */}
-      {tooltip && (
+      {tooltip && !dragState && (
         <div
           className={styles.tooltip}
           style={{
@@ -807,7 +918,7 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
           <div className={styles.tooltipRow}>
             <span>📅</span>
             <span>
-              {formatDate(tooltip.task.startDate)} → {formatDate(tooltip.task.dueDate)}
+              {formatDateOnly(tooltip.task.startDate, 'MMM d, yyyy')} → {formatDateOnly(tooltip.task.dueDate, 'MMM d, yyyy')}
             </span>
           </div>
           <div className={styles.tooltipRow}>
@@ -857,16 +968,22 @@ interface IVisibleRow {
   type: 'task' | 'phase';
   task?: ITask;
   phase?: string;
+  isChild?: boolean;
 }
 
 function buildVisibleRows(tasks: ITask[], collapsedPhases: Set<string>): IVisibleRow[] {
   const rows: IVisibleRow[] = [];
-  // Group by phase
+  const ids = new Set(tasks.map(t => t.id));
+  // A task only renders as a sub-task if its parent is actually present;
+  // otherwise (parent deleted or filtered out) it's promoted to top level so
+  // it never silently disappears.
+  const isSubTask = (t: ITask): boolean => !!t.parentTaskId && ids.has(t.parentTaskId);
+
   const byPhase = new Map<string, ITask[]>();
   const noPhase: ITask[] = [];
 
   tasks.forEach(t => {
-    if (t.parentTaskId) return; // sub-tasks appended under parent below
+    if (isSubTask(t)) return; // appended under parent below
     if (t.phase) {
       if (!byPhase.has(t.phase)) byPhase.set(t.phase, []);
       byPhase.get(t.phase)!.push(t);
@@ -876,16 +993,16 @@ function buildVisibleRows(tasks: ITask[], collapsedPhases: Set<string>): IVisibl
   });
 
   const subtaskMap = new Map<number, ITask[]>();
-  tasks.filter(t => t.parentTaskId).forEach(t => {
+  tasks.filter(isSubTask).forEach(t => {
     if (!subtaskMap.has(t.parentTaskId!)) subtaskMap.set(t.parentTaskId!, []);
     subtaskMap.get(t.parentTaskId!)!.push(t);
   });
 
   const addTask = (task: ITask): void => {
-    rows.push({ type: 'task', task });
+    rows.push({ type: 'task', task, isChild: false });
     const children = subtaskMap.get(task.id);
     if (children) {
-      children.forEach(c => rows.push({ type: 'task', task: c }));
+      children.forEach(c => rows.push({ type: 'task', task: c, isChild: true }));
     }
   };
 

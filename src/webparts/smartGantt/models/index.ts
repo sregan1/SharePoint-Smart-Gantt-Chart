@@ -119,6 +119,7 @@ export interface IGanttDisplaySettings {
   showProgressText: boolean;
   showAssignee: boolean;
   showHealthBadges: boolean;
+  showCriticalPath: boolean;
 }
 
 export const DEFAULT_GANTT_SETTINGS: IGanttDisplaySettings = {
@@ -132,7 +133,30 @@ export const DEFAULT_GANTT_SETTINGS: IGanttDisplaySettings = {
   showProgressText: true,
   showAssignee: false,
   showHealthBadges: true,
+  showCriticalPath: false,
 };
+
+// ─── Task filtering (shared across Gantt / List / Kanban / Dashboard) ─────────
+
+export type DueFilter = 'all' | 'overdue' | 'today' | 'week';
+
+export interface ITaskFilter {
+  text: string;
+  statuses: TaskStatus[];
+  priorities: TaskPriority[];
+  assignees: string[];
+  phases: string[];
+  due: DueFilter;
+}
+
+export const EMPTY_TASK_FILTER: ITaskFilter = {
+  text: '', statuses: [], priorities: [], assignees: [], phases: [], due: 'all',
+};
+
+export function isFilterActive(f: ITaskFilter): boolean {
+  return !!f.text || f.statuses.length > 0 || f.priorities.length > 0
+    || f.assignees.length > 0 || f.phases.length > 0 || f.due !== 'all';
+}
 
 export const HEADER_THEME_COLORS: Record<GanttHeaderTheme, { bg: string; text: string; subtext: string }> = {
   dark:   { bg: '#1B1B3A', text: 'rgba(255,255,255,0.9)', subtext: 'rgba(255,255,255,0.55)' },

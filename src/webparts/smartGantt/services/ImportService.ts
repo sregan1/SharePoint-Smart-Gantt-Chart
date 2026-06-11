@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 import { WebPartContext } from '@microsoft/sp-webpart-base';
 import { ITask, TaskStatus, TaskPriority, TASK_STATUS_OPTIONS, TASK_PRIORITY_OPTIONS } from '../models';
 import { SharePointService } from './SharePointService';
+import { toDateOnly } from '../utils/dateUtils';
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -106,36 +107,41 @@ function mappingNeedsReview(mapping: ColumnMapping): boolean {
 
 // ─── Date normalization ───────────────────────────────────────────────────────
 
+// All schedule dates are normalized to date-only 'YYYY-MM-DD' strings, the
+// canonical form the rest of the app uses (see utils/dateUtils.ts).
+function ymd(y: number, m1: number, d: number): string {
+  return `${y}-${String(m1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
 function parseExcelDate(value: string | number | null | undefined): string {
   if (!value && value !== 0) return '';
 
   if (typeof value === 'number') {
-    // Excel serial date — use Date.UTC to avoid local-timezone day shifts
+    // Excel serial date — already a pure calendar day
     const date = XLSX.SSF.parse_date_code(value);
-    if (date) return new Date(Date.UTC(date.y, date.m - 1, date.d)).toISOString();
-    return '';
+    return date ? ymd(date.y, date.m, date.d) : '';
   }
 
   const str = String(value).trim();
   if (!str) return '';
 
-  // ISO format (YYYY-MM-DD …) — safe to pass directly to new Date()
+  // ISO format (YYYY-MM-DD with optional time) — defer to the shared
+  // normalizer, which handles UTC-midnight and legacy local-midnight values.
   if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
-    const d = new Date(str);
-    return isNaN(d.getTime()) ? '' : d.toISOString();
+    return toDateOnly(str);
   }
 
-  // MM/DD/YYYY or M/D/YYYY — parse explicitly with UTC to avoid locale/timezone issues
+  // MM/DD/YYYY or M/D/YYYY — interpret as a calendar day directly
   const mdy = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (mdy) return new Date(Date.UTC(+mdy[3], +mdy[1] - 1, +mdy[2])).toISOString();
+  if (mdy) return ymd(+mdy[3], +mdy[1], +mdy[2]);
 
-  // DD/MM/YYYY (European format) — only reached for unambiguous day-first values
+  // DD-MM-YYYY (dash-separated, day-first)
   const dmy = str.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
-  if (dmy) return new Date(Date.UTC(+dmy[3], +dmy[2] - 1, +dmy[1])).toISOString();
+  if (dmy) return ymd(+dmy[3], +dmy[2], +dmy[1]);
 
   // Fallback
   const d = new Date(str);
-  return isNaN(d.getTime()) ? '' : d.toISOString();
+  return isNaN(d.getTime()) ? '' : toDateOnly(d.toISOString());
 }
 
 function normalizeStatus(raw: string): TaskStatus {
@@ -351,6 +357,15 @@ export async function fetchPlannerTasks(
     })
   );
 
+  // Planner priority scale: 1 = Urgent, 3 = Important, 5 = Medium, 9 = Low.
+  // Map to labels here — the generic string normalizer would misread "3".
+  const plannerPriorityLabel = (p: number): string => {
+    if (p <= 2) return 'Critical';
+    if (p <= 4) return 'High';
+    if (p <= 7) return 'Medium';
+    return 'Low';
+  };
+
   // Map Planner tasks to our row format
   const rows = plannerTasks.map((t: any) => {
     const assignedUserIds = t.assignments ? Object.keys(t.assignments) : [];
@@ -358,10 +373,10 @@ export async function fetchPlannerTasks(
 
     return {
       'Title': t.title || '',
-      'Start Date': t.startDateTime ? new Date(t.startDateTime).toISOString() : '',
-      'Due Date': t.dueDateTime ? new Date(t.dueDateTime).toISOString() : '',
+      'Start Date': t.startDateTime ? toDateOnly(t.startDateTime) : '',
+      'Due Date': t.dueDateTime ? toDateOnly(t.dueDateTime) : '',
       'Status': t.percentComplete === 100 ? 'Completed' : t.percentComplete > 0 ? 'In Progress' : 'Not Started',
-      'Priority': String(t.priority ?? 5),
+      'Priority': plannerPriorityLabel(typeof t.priority === 'number' ? t.priority : 5),
       'Assigned To': firstUser?.name || '',
       'Assigned To (Email)': firstUser?.email || '',
       '% Complete': String(t.percentComplete ?? 0),

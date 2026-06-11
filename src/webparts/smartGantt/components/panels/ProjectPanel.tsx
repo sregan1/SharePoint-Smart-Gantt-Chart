@@ -4,6 +4,7 @@ import {
   PrimaryButton, DefaultButton, Stack, Label, Spinner, SpinnerSize,
 } from '@fluentui/react';
 import { IProject, PROJECT_COLORS, PROJECT_STATUS_OPTIONS, ProjectStatus } from '../../models';
+import { toDateOnly } from '../../utils/dateUtils';
 
 interface IProjectPanelProps {
   isOpen: boolean;
@@ -31,8 +32,8 @@ export const ProjectPanel: React.FC<IProjectPanelProps> = ({ isOpen, project, on
         setTitle(project.title);
         setDescription(project.description);
         setColor(project.color || PROJECT_COLORS[0]);
-        setStartDate(project.startDate ? project.startDate.split('T')[0] : '');
-        setDueDate(project.dueDate ? project.dueDate.split('T')[0] : '');
+        setStartDate(toDateOnly(project.startDate));
+        setDueDate(toDateOnly(project.dueDate));
         setStatus(project.status);
       } else {
         setTitle('');
@@ -50,7 +51,7 @@ export const ProjectPanel: React.FC<IProjectPanelProps> = ({ isOpen, project, on
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
     if (!title.trim()) errs.title = 'Project name is required.';
-    if (dueDate && startDate && dueDate < startDate) errs.dueDate = 'Due date must be after start date.';
+    if (dueDate && startDate && dueDate < startDate) errs.dueDate = 'Due date must be on or after start date.';
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -63,8 +64,8 @@ export const ProjectPanel: React.FC<IProjectPanelProps> = ({ isOpen, project, on
         title: title.trim(),
         description,
         color,
-        startDate: startDate ? new Date(startDate).toISOString() : '',
-        dueDate: dueDate ? new Date(dueDate).toISOString() : '',
+        startDate,
+        dueDate,
         status,
       });
     } finally {

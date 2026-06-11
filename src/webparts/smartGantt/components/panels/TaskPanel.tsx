@@ -10,6 +10,7 @@ import {
   STATUS_COLORS, PRIORITY_COLORS, PROJECT_COLORS,
 } from '../../models';
 import { AutocompleteField } from '../common/AutocompleteField';
+import { toDateOnly } from '../../utils/dateUtils';
 
 interface ITaskPanelProps {
   isOpen: boolean;
@@ -66,7 +67,12 @@ export const TaskPanel: React.FC<ITaskPanelProps> = ({
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
     if (!form.title?.trim()) errs.title = 'Task name is required.';
-    if (form.dueDate && form.startDate && form.dueDate < form.startDate) {
+    // Normalize both sides to YYYY-MM-DD before comparing — an edited field
+    // holds a date-only string while an untouched one may still be a full ISO
+    // value, and comparing those directly gives false positives.
+    const start = toDateOnly(form.startDate);
+    const due = toDateOnly(form.dueDate);
+    if (due && start && due < start) {
       errs.dueDate = 'Due date must be on or after start date.';
     }
     setErrors(errs);
@@ -80,8 +86,8 @@ export const TaskPanel: React.FC<ITaskPanelProps> = ({
       await onSave({
         ...form,
         title: form.title!.trim(),
-        startDate: form.startDate ? new Date(form.startDate).toISOString() : '',
-        dueDate: form.dueDate ? new Date(form.dueDate).toISOString() : '',
+        startDate: toDateOnly(form.startDate),
+        dueDate: toDateOnly(form.dueDate),
       });
     } finally {
       setSaving(false);
@@ -99,12 +105,34 @@ export const TaskPanel: React.FC<ITaskPanelProps> = ({
       .map(t => ({ key: t.id, text: t.title })),
   ];
 
-  // Tasks available to add as dependencies (not self, not already selected)
+  // Tasks available to add as dependencies: not self, not already selected,
+  // and not a task that (transitively) depends on this one — that would
+  // create a dependency cycle.
   const currentDeps = form.dependencies || [];
+  const dependentIds = React.useMemo(() => {
+    const set = new Set<number>();
+    if (!task) return set;
+    const dependentsOf = new Map<number, number[]>();
+    tasks.forEach(t => {
+      t.dependencies.forEach(depId => {
+        if (!dependentsOf.has(depId)) dependentsOf.set(depId, []);
+        dependentsOf.get(depId)!.push(t.id);
+      });
+    });
+    const queue = [task.id];
+    while (queue.length) {
+      const cur = queue.pop()!;
+      for (const next of dependentsOf.get(cur) || []) {
+        if (!set.has(next)) { set.add(next); queue.push(next); }
+      }
+    }
+    return set;
+  }, [tasks, task]);
+
   const addableDepOptions: IDropdownOption[] = [
     { key: '', text: 'Select a task…' },
     ...tasks
-      .filter(t => t.id !== task?.id && !currentDeps.includes(t.id))
+      .filter(t => t.id !== task?.id && !currentDeps.includes(t.id) && !dependentIds.has(t.id))
       .map(t => ({ key: t.id, text: t.title })),
   ];
 

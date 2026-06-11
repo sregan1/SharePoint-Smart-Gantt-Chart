@@ -163,6 +163,7 @@ export const GanttSettings: React.FC<IGanttSettingsProps> = ({
           {([
             ['showWeekends',     'Weekend shading'],
             ['showDependencies', 'Dependency arrows'],
+            ['showCriticalPath', 'Critical path highlight'],
             ['showProgressText', 'Progress % on bars'],
             ['showAssignee',     'Assignee name on bars'],
             ['showHealthBadges', 'Health status badges'],

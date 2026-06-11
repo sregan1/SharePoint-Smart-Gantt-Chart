@@ -2,23 +2,40 @@ import { SPFI } from '@pnp/sp';
 import '@pnp/sp/webs';
 import '@pnp/sp/lists';
 import '@pnp/sp/items';
+import '@pnp/sp/items/get-all';
 import '@pnp/sp/fields';
 import '@pnp/sp/views';
+import '@pnp/sp/batching';
 import { IProject, ITask, IProjectTaskStats, ProjectStatus, TaskPriority, TaskStatus } from '../models';
 import { computeTaskHealth, computeProjectHealth } from '../utils/healthUtils';
+import { toDateOnly } from '../utils/dateUtils';
 
 const PROJECTS_LIST = 'SmartGantt_Projects';
 
-// PnPjs serializes Date objects correctly for SharePoint Edm.DateTime fields.
-// Passing raw ISO strings can fail in some tenant configurations.
+// Schedule dates are calendar days. We store them as UTC midnight so the same
+// day is read back regardless of the viewer's timezone (PnPjs serializes Date
+// objects for Edm.DateTime fields; raw ISO strings can fail in some tenants).
 function toSPDate(s: string | undefined | null): Date | null {
-  if (!s) return null;
-  const d = new Date(s);
-  return isNaN(d.getTime()) ? null : d;
+  const dateOnly = toDateOnly(s);
+  if (!dateOnly) return null;
+  const [y, m, d] = dateOnly.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
+}
+
+// PnPjs surfaces HTTP failures as HttpRequestError with a status property;
+// only a 404 means "the list/field genuinely doesn't exist". Anything else
+// (403 for a read-only user, throttling, network) must not trigger creation.
+function isNotFoundError(e: unknown): boolean {
+  const status = (e as { status?: number })?.status;
+  if (status === 404) return true;
+  if (status !== undefined) return false;
+  const msg = e instanceof Error ? e.message : String(e);
+  return msg.indexOf('404') !== -1 || /does not exist/i.test(msg);
 }
 
 export class SharePointService {
   private sp: SPFI;
+  private projectsListEnsured = false;
 
   constructor(sp: SPFI) {
     this.sp = sp;
@@ -27,11 +44,13 @@ export class SharePointService {
   // ─── Projects ────────────────────────────────────────────────────────────
 
   async ensureProjectsList(): Promise<void> {
+    if (this.projectsListEnsured) return;
     try {
       await this.sp.web.lists.getByTitle(PROJECTS_LIST)();
       // List exists — add IsArchived if missing (migration for deployments before v1.2)
       await this._ensureIsArchivedField();
-    } catch {
+    } catch (e) {
+      if (!isNotFoundError(e)) throw e;
       await this.sp.web.lists.add(PROJECTS_LIST, 'Smart Gantt — project registry', 100, false);
       const list = this.sp.web.lists.getByTitle(PROJECTS_LIST);
       await list.fields.addText('ProjectListName', { MaxLength: 255 });
@@ -47,6 +66,7 @@ export class SharePointService {
       await list.fields.add('IsArchived', 8, {});
       await this._setupMetaListView();
     }
+    this.projectsListEnsured = true;
   }
 
   private async _ensureIsArchivedField(): Promise<void> {
@@ -54,7 +74,12 @@ export class SharePointService {
     try {
       await list.fields.getByInternalNameOrTitle('IsArchived')();
     } catch {
-      await list.fields.add('IsArchived', 8, {});
+      try {
+        await list.fields.add('IsArchived', 8, {});
+      } catch (e) {
+        // Read-only users can't add fields; archiving simply won't be available.
+        console.warn('[SmartGantt] IsArchived migration skipped:', e);
+      }
     }
   }
 
@@ -67,23 +92,24 @@ export class SharePointService {
         'ProjectStartDate', 'ProjectDueDate', 'ProjectStatus', 'ProjectManager',
         'ProjectManagerEmail', 'Created', 'IsArchived'
       )
-      .orderBy('Title', true)
-      .top(500)();
+      .getAll();
 
-    return items.map(item => ({
-      id: item.Id,
-      title: item.Title,
-      listName: item.ProjectListName || '',
-      description: item.ProjectDescription || '',
-      color: item.ProjectColor || '#0078D4',
-      startDate: item.ProjectStartDate || '',
-      dueDate: item.ProjectDueDate || '',
-      status: (item.ProjectStatus || 'Active') as ProjectStatus,
-      projectManager: item.ProjectManager || '',
-      projectManagerEmail: item.ProjectManagerEmail || '',
-      created: item.Created,
-      isArchived: item.IsArchived === true,
-    }));
+    return items
+      .map(item => ({
+        id: item.Id,
+        title: item.Title,
+        listName: item.ProjectListName || '',
+        description: item.ProjectDescription || '',
+        color: item.ProjectColor || '#0078D4',
+        startDate: toDateOnly(item.ProjectStartDate),
+        dueDate: toDateOnly(item.ProjectDueDate),
+        status: (item.ProjectStatus || 'Active') as ProjectStatus,
+        projectManager: item.ProjectManager || '',
+        projectManagerEmail: item.ProjectManagerEmail || '',
+        created: item.Created,
+        isArchived: item.IsArchived === true,
+      }))
+      .sort((a, b) => a.title.localeCompare(b.title));
   }
 
   async createProject(data: {
@@ -96,20 +122,27 @@ export class SharePointService {
   }): Promise<IProject> {
     await this.ensureProjectsList();
 
-    const sanitized = data.title.replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+    const sanitized = data.title.replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '') || 'Project';
     const listName = await this._buildListName(sanitized);
 
     await this._createProjectList(listName);
 
-    const result = await this.sp.web.lists.getByTitle(PROJECTS_LIST).items.add({
-      Title: data.title,
-      ProjectListName: listName,
-      ProjectDescription: data.description,
-      ProjectColor: data.color,
-      ProjectStartDate: toSPDate(data.startDate),
-      ProjectDueDate: toSPDate(data.dueDate),
-      ProjectStatus: data.status,
-    });
+    let result;
+    try {
+      result = await this.sp.web.lists.getByTitle(PROJECTS_LIST).items.add({
+        Title: data.title,
+        ProjectListName: listName,
+        ProjectDescription: data.description,
+        ProjectColor: data.color,
+        ProjectStartDate: toSPDate(data.startDate),
+        ProjectDueDate: toSPDate(data.dueDate),
+        ProjectStatus: data.status,
+      });
+    } catch (e) {
+      // Registry entry failed — recycle the orphan task list so a retry is clean.
+      try { await this.sp.web.lists.getByTitle(listName).recycle(); } catch { /* best effort */ }
+      throw e;
+    }
 
     return {
       id: result.data.Id,
@@ -117,8 +150,8 @@ export class SharePointService {
       listName,
       description: data.description,
       color: data.color,
-      startDate: data.startDate,
-      dueDate: data.dueDate,
+      startDate: toDateOnly(data.startDate),
+      dueDate: toDateOnly(data.dueDate),
       status: data.status,
       projectManager: '',
       projectManagerEmail: '',
@@ -161,43 +194,37 @@ export class SharePointService {
     // Brief pause so SharePoint fully provisions the list before we add fields.
     await new Promise<void>(resolve => setTimeout(resolve, 1500));
 
-    const list = this.sp.web.lists.getByTitle(listName);
-
-    // Field definitions: [title, addMethod, properties?]
     // IsMilestone uses FieldTypeKind 8 (Boolean) via the generic add() because
     // addBoolean() in PnPjs 3.x passes the wrong SP type and triggers a 400.
-    const fields: Array<() => Promise<unknown>> = [
-      () => list.fields.addMultilineText('TaskDescription'),
-      () => list.fields.addDateTime('StartDate'),
-      () => list.fields.addDateTime('DueDate'),
-      () => list.fields.addChoice('Status', {
-        Choices: ['Not Started', 'In Progress', 'Completed', 'On Hold', 'Cancelled'],
-      }),
-      () => list.fields.addChoice('Priority', {
-        Choices: ['Critical', 'High', 'Medium', 'Low'],
-      }),
-      () => list.fields.addNumber('PercentComplete'),
-      () => list.fields.addNumber('ParentTaskId'),
-      () => list.fields.addText('Dependencies', { MaxLength: 500 }),
-      () => list.fields.addMultilineText('Notes'),
-      () => list.fields.addText('TaskColor', { MaxLength: 20 }),
-      () => list.fields.addNumber('SortOrder'),
-      // FieldTypeKind 8 = Boolean. Using add() directly because addBoolean()
-      // in PnPjs 3.x passes the wrong __metadata type and triggers a SharePoint 400.
-      () => list.fields.add('IsMilestone', 8),
-      () => list.fields.addText('Phase', { MaxLength: 100 }),
-      () => list.fields.addText('AssignedToName', { MaxLength: 255 }),
-      () => list.fields.addText('AssignedToEmail', { MaxLength: 255 }),
-    ];
+    // All field adds go through a single REST batch — one round trip instead
+    // of fifteen. Individual failures (duplicate field, etc.) are non-fatal.
+    const [batchedSP, execute] = this.sp.batched();
+    const list = batchedSP.web.lists.getByTitle(listName);
+    const queue = (p: Promise<unknown>): void => {
+      p.catch(e => console.warn('[SmartGantt] Field creation warning (non-fatal):', e));
+    };
 
-    for (const addField of fields) {
-      try {
-        await addField();
-      } catch (e) {
-        // Log but continue — a duplicate or pre-existing field is non-fatal.
-        console.warn('[SmartGantt] Field creation warning (non-fatal):', e);
-      }
-    }
+    queue(list.fields.addMultilineText('TaskDescription'));
+    queue(list.fields.addDateTime('StartDate'));
+    queue(list.fields.addDateTime('DueDate'));
+    queue(list.fields.addChoice('Status', {
+      Choices: ['Not Started', 'In Progress', 'Completed', 'On Hold', 'Cancelled'],
+    }));
+    queue(list.fields.addChoice('Priority', {
+      Choices: ['Critical', 'High', 'Medium', 'Low'],
+    }));
+    queue(list.fields.addNumber('PercentComplete'));
+    queue(list.fields.addNumber('ParentTaskId'));
+    queue(list.fields.addText('Dependencies', { MaxLength: 500 }));
+    queue(list.fields.addMultilineText('Notes'));
+    queue(list.fields.addText('TaskColor', { MaxLength: 20 }));
+    queue(list.fields.addNumber('SortOrder'));
+    queue(list.fields.add('IsMilestone', 8));
+    queue(list.fields.addText('Phase', { MaxLength: 100 }));
+    queue(list.fields.addText('AssignedToName', { MaxLength: 255 }));
+    queue(list.fields.addText('AssignedToEmail', { MaxLength: 255 }));
+
+    await execute();
 
     await this._setupTaskListViews(listName);
   }
@@ -205,23 +232,22 @@ export class SharePointService {
   // ─── Tasks ────────────────────────────────────────────────────────────────
 
   async getProjectTasks(listName: string): Promise<ITask[]> {
-    try {
-      const items = await this.sp.web.lists
-        .getByTitle(listName)
-        .items.select(
-          'Id', 'Title', 'TaskDescription', 'StartDate', 'DueDate', 'Status', 'Priority',
-          'AssignedToName', 'AssignedToEmail', 'PercentComplete', 'ParentTaskId', 'Dependencies',
-          'Notes', 'TaskColor', 'SortOrder', 'IsMilestone', 'Phase', 'Created', 'Modified'
-        )
-        .orderBy('SortOrder', true)
-        .top(1000)();
+    const items = await this.sp.web.lists
+      .getByTitle(listName)
+      .items.select(
+        'Id', 'Title', 'TaskDescription', 'StartDate', 'DueDate', 'Status', 'Priority',
+        'AssignedToName', 'AssignedToEmail', 'PercentComplete', 'ParentTaskId', 'Dependencies',
+        'Notes', 'TaskColor', 'SortOrder', 'IsMilestone', 'Phase', 'Created', 'Modified'
+      )
+      .getAll();
 
-      return items.map(item => ({
+    return items
+      .map(item => ({
         id: item.Id,
         title: item.Title,
         description: item.TaskDescription || '',
-        startDate: item.StartDate || '',
-        dueDate: item.DueDate || '',
+        startDate: toDateOnly(item.StartDate),
+        dueDate: toDateOnly(item.DueDate),
         status: (item.Status || 'Not Started') as TaskStatus,
         priority: (item.Priority || 'Medium') as TaskPriority,
         assignedTo: item.AssignedToName || '',
@@ -238,10 +264,8 @@ export class SharePointService {
         phase: item.Phase || '',
         created: item.Created,
         modified: item.Modified,
-      }));
-    } catch {
-      return [];
-    }
+      }))
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id);
   }
 
   async getProjectTaskStats(project: IProject): Promise<IProjectTaskStats> {
@@ -264,7 +288,7 @@ export class SharePointService {
       const items = await this.sp.web.lists
         .getByTitle(project.listName)
         .items.select('Status', 'Priority', 'PercentComplete', 'StartDate', 'DueDate', 'IsMilestone')
-        .top(1000)();
+        .getAll();
 
       if (items.length === 0) return empty;
 
@@ -272,8 +296,8 @@ export class SharePointService {
         id: 0,
         title: '',
         description: '',
-        startDate: item.StartDate || '',
-        dueDate: item.DueDate || '',
+        startDate: toDateOnly(item.StartDate),
+        dueDate: toDateOnly(item.DueDate),
         status: (item.Status || 'Not Started') as TaskStatus,
         priority: (item.Priority || 'Medium') as TaskPriority,
         assignedTo: '', assignedToEmail: '',
@@ -290,15 +314,15 @@ export class SharePointService {
       let overdueCount = 0;
       let atRiskCount = 0;
       let milestoneCount = 0;
-      const starts: Date[] = [];
-      const ends: Date[] = [];
+      let earliestStart = '';
+      let latestDue = '';
 
       for (const task of tasks) {
         byStatus[task.status] = (byStatus[task.status] || 0) + 1;
         totalPct += task.percentComplete;
         if (task.isMilestone) milestoneCount++;
-        if (task.startDate) starts.push(new Date(task.startDate));
-        if (task.dueDate) ends.push(new Date(task.dueDate));
+        if (task.startDate && (!earliestStart || task.startDate < earliestStart)) earliestStart = task.startDate;
+        if (task.dueDate && (!latestDue || task.dueDate > latestDue)) latestDue = task.dueDate;
         const h = computeTaskHealth(task, today);
         if (h === 'overdue') overdueCount++;
         if (h === 'at-risk') atRiskCount++;
@@ -315,8 +339,8 @@ export class SharePointService {
         inProgressCount: byStatus['In Progress'],
         completedCount: byStatus['Completed'],
         milestoneCount,
-        earliestStart: starts.length ? starts.reduce((a, b) => a < b ? a : b).toISOString() : project.startDate || '',
-        latestDue: ends.length ? ends.reduce((a, b) => a > b ? a : b).toISOString() : project.dueDate || '',
+        earliestStart: earliestStart || project.startDate || '',
+        latestDue: latestDue || project.dueDate || '',
       };
     } catch {
       return empty;
@@ -356,8 +380,8 @@ export class SharePointService {
       id: result.data.Id,
       title: task.title || 'New Task',
       description: task.description || '',
-      startDate: task.startDate || '',
-      dueDate: task.dueDate || '',
+      startDate: toDateOnly(task.startDate),
+      dueDate: toDateOnly(task.dueDate),
       status: (task.status || 'Not Started') as TaskStatus,
       priority: (task.priority || 'Medium') as TaskPriority,
       assignedTo: task.assignedTo || '',
@@ -397,15 +421,27 @@ export class SharePointService {
   }
 
   async deleteTask(listName: string, id: number): Promise<void> {
-    await this.sp.web.lists.getByTitle(listName).items.getById(id).delete();
-  }
+    const list = this.sp.web.lists.getByTitle(listName);
 
-  async reorderTasks(listName: string, taskIds: number[]): Promise<void> {
-    await Promise.all(
-      taskIds.map((id, index) =>
-        this.sp.web.lists.getByTitle(listName).items.getById(id).update({ SortOrder: index })
-      )
-    );
+    // Promote sub-tasks to top level first, so they don't become invisible
+    // orphans (views only render sub-tasks under an existing parent).
+    try {
+      const children = await list.items.select('Id').filter(`ParentTaskId eq ${id}`).top(500)();
+      if (children.length > 0) {
+        const [batchedSP, execute] = this.sp.batched();
+        const batchedList = batchedSP.web.lists.getByTitle(listName);
+        children.forEach(c => {
+          batchedList.items.getById(c.Id).update({ ParentTaskId: 0 })
+            .catch(e => console.warn('[SmartGantt] Sub-task promotion warning:', e));
+        });
+        await execute();
+      }
+    } catch (e) {
+      console.warn('[SmartGantt] Orphan cleanup (non-fatal):', e);
+    }
+
+    // Recycle (not delete) so the task can be restored from the recycle bin.
+    await list.items.getById(id).recycle();
   }
 
   // ─── List naming ──────────────────────────────────────────────────────────

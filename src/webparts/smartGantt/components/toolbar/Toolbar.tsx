@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Callout, DirectionalHint } from '@fluentui/react';
-import { IProject, ViewMode, ZoomLevel, IGanttDisplaySettings } from '../../models';
+import { IProject, ViewMode, ZoomLevel, IGanttDisplaySettings, ITaskFilter } from '../../models';
+import { FilterBar } from './FilterBar';
 import styles from './Toolbar.module.scss';
 
 interface IToolbarProps {
@@ -30,6 +31,12 @@ interface IToolbarProps {
   onPortfolioExportPowerPoint: () => void;
   onOpenSettings: () => void;
   showSettings: boolean;
+  taskFilter: ITaskFilter;
+  onFilterChange: (f: ITaskFilter) => void;
+  knownUsers: string[];
+  knownPhases: string[];
+  filteredCount: number;
+  totalCount: number;
 }
 
 export const Toolbar: React.FC<IToolbarProps> = ({
@@ -58,6 +65,12 @@ export const Toolbar: React.FC<IToolbarProps> = ({
   onPortfolioExportPowerPoint,
   onOpenSettings,
   showSettings,
+  taskFilter,
+  onFilterChange,
+  knownUsers,
+  knownPhases,
+  filteredCount,
+  totalCount,
 }) => {
   const [projectCalloutVisible, setProjectCalloutVisible] = React.useState(false);
   const [moreCalloutVisible, setMoreCalloutVisible] = React.useState(false);
@@ -88,7 +101,17 @@ export const Toolbar: React.FC<IToolbarProps> = ({
             className={styles.projectSelector}
             ref={projectBtnRef}
             onClick={() => setProjectCalloutVisible(v => !v)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setProjectCalloutVisible(v => !v);
+              }
+            }}
             role="button"
+            tabIndex={0}
+            aria-haspopup="true"
+            aria-expanded={projectCalloutVisible}
+            aria-label="Select project"
           >
             {viewMode === 'portfolio' ? (
               <span style={{ fontSize: 14, marginRight: 2 }}>⊞</span>
@@ -232,6 +255,7 @@ export const Toolbar: React.FC<IToolbarProps> = ({
                     key={z.id}
                     className={`${styles.zoomBtn} ${zoomLevel === z.id ? styles.active : ''}`}
                     onClick={() => onZoomChange(z.id)}
+                    aria-pressed={zoomLevel === z.id}
                   >
                     {z.label}
                   </button>
@@ -239,6 +263,16 @@ export const Toolbar: React.FC<IToolbarProps> = ({
               </div>
               <div className={styles.divider} />
             </>
+          )}
+          {selectedProject && totalCount > 0 && (
+            <FilterBar
+              filter={taskFilter}
+              onChange={onFilterChange}
+              assignees={knownUsers}
+              phases={knownPhases}
+              matchCount={filteredCount}
+              totalCount={totalCount}
+            />
           )}
         </div>
 

@@ -1,10 +1,10 @@
 import * as React from 'react';
-import { format } from 'date-fns';
 import {
   ITask, IProject, TaskStatus,
   STATUS_COLORS, STATUS_LIGHT_COLORS, PRIORITY_COLORS,
 } from '../../models';
 import { computeTaskHealth } from '../../utils/healthUtils';
+import { parseDateOnly, formatDateOnly, todayLocalMidnight } from '../../utils/dateUtils';
 import { HealthBadge } from '../common/HealthBadge';
 import styles from './KanbanView.module.scss';
 
@@ -31,14 +31,10 @@ const COLUMNS: IColumn[] = [
   { status: 'Completed', label: 'Completed', color: '#107C10' },
 ];
 
-function formatDate(s: string): string {
-  if (!s) return '';
-  try { return format(new Date(s), 'MMM d'); } catch { return ''; }
-}
-
 function isOverdue(task: ITask): boolean {
   if (!task.dueDate || task.status === 'Completed' || task.status === 'Cancelled') return false;
-  return new Date(task.dueDate) < new Date();
+  const due = parseDateOnly(task.dueDate);
+  return !!due && due < todayLocalMidnight();
 }
 
 function initials(name: string): string {
@@ -58,19 +54,20 @@ export const KanbanView: React.FC<IKanbanViewProps> = ({
   const [draggingId, setDraggingId] = React.useState<number | null>(null);
   const [dragOverCol, setDragOverCol] = React.useState<TaskStatus | null>(null);
 
-  // Group tasks by status
+  // Group tasks by status. Cancelled gets its own bucket — without it,
+  // cancelled tasks used to fall through to Not Started AND render again in
+  // the Cancelled column. Sub-tasks with a present parent stay off the board;
+  // orphaned sub-tasks are shown so they never silently disappear.
   const tasksByStatus = React.useMemo(() => {
+    const ids = new Set(tasks.map(t => t.id));
+    const isSubTask = (t: ITask): boolean => !!t.parentTaskId && ids.has(t.parentTaskId);
     const map = new Map<TaskStatus, ITask[]>();
     COLUMNS.forEach(c => map.set(c.status, []));
+    map.set('Cancelled', []);
     tasks
-      .filter(t => !t.parentTaskId)
+      .filter(t => !isSubTask(t))
       .forEach(t => {
-        const col = map.get(t.status);
-        if (col) col.push(t);
-        else {
-          const def = map.get('Not Started')!;
-          def.push(t);
-        }
+        (map.get(t.status) || map.get('Not Started')!).push(t);
       });
     return map;
   }, [tasks]);
@@ -106,6 +103,9 @@ export const KanbanView: React.FC<IKanbanViewProps> = ({
         if (newStatus === 'Completed' && task.percentComplete < 100) {
           updates.percentComplete = 100;
         }
+        if (newStatus === 'Not Started' && task.percentComplete > 0) {
+          updates.percentComplete = 0;
+        }
         onTaskUpdate(taskId, updates);
       }
     }
@@ -115,8 +115,8 @@ export const KanbanView: React.FC<IKanbanViewProps> = ({
 
   const renderCard = (task: ITask, colColor: string): React.ReactNode => {
     const overdue = isOverdue(task);
-    const dueStr = formatDate(task.dueDate);
-    const startStr = formatDate(task.startDate);
+    const dueStr = formatDateOnly(task.dueDate, 'MMM d', '');
+    const startStr = formatDateOnly(task.startDate, 'MMM d', '');
 
     return (
       <div
@@ -133,6 +133,7 @@ export const KanbanView: React.FC<IKanbanViewProps> = ({
             className={styles.cardActionBtn}
             onClick={e => { e.stopPropagation(); onEditTask(task); }}
             title="Edit"
+            aria-label={`Edit task ${task.title}`}
           >
             ✏
           </button>
@@ -140,6 +141,7 @@ export const KanbanView: React.FC<IKanbanViewProps> = ({
             className={`${styles.cardActionBtn} ${styles.deleteBtn}`}
             onClick={e => { e.stopPropagation(); onDeleteTask(task.id); }}
             title="Delete"
+            aria-label={`Delete task ${task.title}`}
           >
             ✕
           </button>
@@ -238,6 +240,8 @@ export const KanbanView: React.FC<IKanbanViewProps> = ({
     );
   };
 
+  const cancelledTasks = tasksByStatus.get('Cancelled') || [];
+
   return (
     <div className={styles.kanbanView}>
       <div className={styles.board}>
@@ -281,7 +285,7 @@ export const KanbanView: React.FC<IKanbanViewProps> = ({
 
         {/* Cancelled column — collapsed sidebar style */}
         <div
-          className={styles.column}
+          className={`${styles.column} ${dragOverCol === 'Cancelled' ? styles.dragOver : ''}`}
           style={{ opacity: 0.6 }}
           onDragOver={e => handleDragOver(e, 'Cancelled')}
           onDragLeave={handleDragLeave}
@@ -290,14 +294,13 @@ export const KanbanView: React.FC<IKanbanViewProps> = ({
           <div className={styles.columnHeader}>
             <div className={styles.columnDot} style={{ background: STATUS_COLORS['Cancelled'] }} />
             <span className={styles.columnTitle}>Cancelled</span>
-            <span className={styles.columnCount}>
-              {tasks.filter(t => t.status === 'Cancelled').length}
-            </span>
+            <span className={styles.columnCount}>{cancelledTasks.length}</span>
           </div>
           <div className={styles.cardList}>
-            {tasks
-              .filter(t => t.status === 'Cancelled' && !t.parentTaskId)
-              .map(task => renderCard(task, STATUS_COLORS['Cancelled']))}
+            {dragOverCol === 'Cancelled' && draggingId !== null && (
+              <div className={styles.dropPlaceholder} />
+            )}
+            {cancelledTasks.map(task => renderCard(task, STATUS_COLORS['Cancelled']))}
           </div>
         </div>
       </div>

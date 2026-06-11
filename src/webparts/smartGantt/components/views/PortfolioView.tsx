@@ -1,9 +1,10 @@
 import * as React from 'react';
 import { Spinner, SpinnerSize } from '@fluentui/react';
-import { format, parseISO, isValid, differenceInCalendarDays } from 'date-fns';
+import { differenceInCalendarDays } from 'date-fns';
 import { IProject, IProjectTaskStats } from '../../models';
 import { HealthBadge } from '../common/HealthBadge';
 import { ProjectHealth } from '../../models';
+import { parseDateOnly, formatDateOnly, todayLocalMidnight } from '../../utils/dateUtils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -37,13 +38,7 @@ const STATUS_LIGHT_COLORS: Record<string, string> = {
 };
 
 function formatDate(s: string): string {
-  if (!s) return '—';
-  try {
-    const d = parseISO(s);
-    return isValid(d) ? format(d, 'MMM d, yyyy') : '—';
-  } catch {
-    return '—';
-  }
+  return formatDateOnly(s, 'MMM d, yyyy');
 }
 
 function initials(name: string): string {
@@ -61,11 +56,11 @@ interface IMiniTimelineProps {
 const MiniTimeline: React.FC<IMiniTimelineProps> = ({ start, end, color }) => {
   if (!start || !end) return null;
 
-  const startDate = parseISO(start);
-  const endDate = parseISO(end);
-  const today = new Date();
+  const startDate = parseDateOnly(start);
+  const endDate = parseDateOnly(end);
+  const today = todayLocalMidnight();
 
-  if (!isValid(startDate) || !isValid(endDate)) return null;
+  if (!startDate || !endDate) return null;
 
   const total = differenceInCalendarDays(endDate, startDate);
   if (total <= 0) return null;

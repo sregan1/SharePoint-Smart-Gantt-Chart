@@ -1,26 +1,23 @@
-import { differenceInDays, parseISO, isValid } from 'date-fns';
+import { differenceInDays } from 'date-fns';
 import { ITask, IProject, TaskHealth, ProjectHealth } from '../models';
-
-function parseDate(value: string): Date | null {
-  if (!value) return null;
-  const d = parseISO(value);
-  return isValid(d) ? d : null;
-}
+import { parseDateOnly } from './dateUtils';
 
 export function computeTaskHealth(task: ITask, today: Date = new Date()): TaskHealth {
   if (task.status === 'Completed' || task.status === 'Cancelled') return 'complete';
 
-  const due = parseDate(task.dueDate);
-  const start = parseDate(task.startDate);
+  // Compare calendar days, not instants: a task due today is not overdue.
+  const todayDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const due = parseDateOnly(task.dueDate);
+  const start = parseDateOnly(task.startDate);
 
-  if (due && due < today) return 'overdue';
+  if (due && due < todayDay) return 'overdue';
 
-  if (start && start < today && task.status === 'Not Started') return 'at-risk';
+  if (start && start < todayDay && task.status === 'Not Started') return 'at-risk';
 
   if (start && due) {
     const totalDays = differenceInDays(due, start);
     if (totalDays >= 3) {
-      const elapsedDays = differenceInDays(today, start);
+      const elapsedDays = differenceInDays(todayDay, start);
       if (elapsedDays > 0) {
         const expectedPct = Math.min(100, (elapsedDays / totalDays) * 100);
         if (task.percentComplete < expectedPct - 10) return 'at-risk';
@@ -77,4 +74,67 @@ export function healthLabel(h: TaskHealth | ProjectHealth): string {
     case 'at-risk':   return 'At Risk';
     case 'overdue':   return 'Overdue';
   }
+}
+
+// ─── Critical path ────────────────────────────────────────────────────────────
+
+/**
+ * Computes the set of task ids on the critical path: the dependency chain with
+ * the latest finish, walked backwards through each predecessor whose finish
+ * immediately gates its successor. Tasks without dates are skipped.
+ */
+export function computeCriticalPath(tasks: ITask[]): Set<number> {
+  const byId = new Map(tasks.map(t => [t.id, t]));
+  const finish = new Map<number, number>(); // task id → critical finish time (ms)
+  const visiting = new Set<number>();
+
+  const getFinish = (t: ITask): number => {
+    if (finish.has(t.id)) return finish.get(t.id)!;
+    if (visiting.has(t.id)) return -Infinity; // dependency cycle — bail out
+    visiting.add(t.id);
+    const own = parseDateOnly(t.dueDate)?.getTime() ?? -Infinity;
+    let result = own;
+    for (const depId of t.dependencies) {
+      const dep = byId.get(depId);
+      if (dep) result = Math.max(result, getFinish(dep));
+    }
+    visiting.delete(t.id);
+    finish.set(t.id, result);
+    return result;
+  };
+
+  let endTask: ITask | null = null;
+  let endFinish = -Infinity;
+  for (const t of tasks) {
+    if (t.status === 'Cancelled') continue;
+    const f = getFinish(t);
+    if (f > endFinish) { endFinish = f; endTask = t; }
+  }
+
+  const path = new Set<number>();
+  let cur = endTask;
+  while (cur && !path.has(cur.id)) {
+    path.add(cur.id);
+    let next: ITask | null = null;
+    let nextFinish = -Infinity;
+    for (const depId of cur.dependencies) {
+      const dep = byId.get(depId);
+      if (!dep) continue;
+      const f = finish.get(dep.id) ?? -Infinity;
+      if (f > nextFinish) { nextFinish = f; next = dep; }
+    }
+    cur = next;
+  }
+  return path;
+}
+
+/** True when a task is In Progress/Completed but a dependency is not yet complete. */
+export function hasDependencyViolation(task: ITask, allTasks: ITask[]): boolean {
+  if (task.status === 'Not Started' || task.status === 'Cancelled') return false;
+  if (!task.dependencies.length) return false;
+  const byId = new Map(allTasks.map(t => [t.id, t]));
+  return task.dependencies.some(depId => {
+    const dep = byId.get(depId);
+    return !!dep && dep.status !== 'Completed' && dep.status !== 'Cancelled';
+  });
 }

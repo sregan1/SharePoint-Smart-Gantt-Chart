@@ -8,11 +8,19 @@ import {
   IProject, ITask, IProjectTaskStats, IGanttDisplaySettings, STATUS_COLORS, PRIORITY_COLORS,
   HEADER_THEME_COLORS, phaseColor,
 } from '../models';
+import { computeTaskHealth, healthColor } from '../utils/healthUtils';
+import { parseDateOnly, formatDateOnly, todayLocalMidnight } from '../utils/dateUtils';
+
+// Strip characters that are invalid in file names (project titles can contain
+// anything).
+function safeFileName(name: string): string {
+  return name.replace(/[\\/:*?"<>|]/g, '-').trim();
+}
 
 // ─── Excel export ─────────────────────────────────────────────────────────────
 
 export function exportTasksToExcel(project: IProject, tasks: ITask[]): void {
-  const fmt = (d: string): string => d ? format(new Date(d), 'MM/dd/yyyy') : '';
+  const fmt = (d: string): string => formatDateOnly(d, 'MM/dd/yyyy', '');
 
   const rows = tasks.map(t => ({
     'Task Name': t.title,
@@ -39,7 +47,7 @@ export function exportTasksToExcel(project: IProject, tasks: ITask[]): void {
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Tasks');
-  XLSX.writeFile(wb, `${project.title} - Tasks.xlsx`);
+  XLSX.writeFile(wb, `${safeFileName(project.title)} - Tasks.xlsx`);
 }
 
 // ─── Gantt image export ───────────────────────────────────────────────────────
@@ -57,7 +65,8 @@ function escXml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function parseDate(s: string): Date | null {
+// Created/Modified are real timestamps — parse directly, not as date-only.
+function parseTimestamp(s: string): Date | null {
   if (!s) return null;
   const d = new Date(s);
   return isNaN(d.getTime()) ? null : d;
@@ -70,13 +79,17 @@ function buildRows(tasks: ITask[]): IVisibleRow[] {
   const byPhase = new Map<string, ITask[]>();
   const noPhase: ITask[] = [];
   const subMap = new Map<number, ITask[]>();
+  const ids = new Set(tasks.map(t => t.id));
+  // Sub-tasks whose parent is missing are promoted to top level so they
+  // never disappear from the export.
+  const isSubTask = (t: ITask): boolean => !!t.parentTaskId && ids.has(t.parentTaskId);
 
-  tasks.filter(t => t.parentTaskId).forEach(t => {
+  tasks.filter(isSubTask).forEach(t => {
     if (!subMap.has(t.parentTaskId!)) subMap.set(t.parentTaskId!, []);
     subMap.get(t.parentTaskId!)!.push(t);
   });
 
-  tasks.filter(t => !t.parentTaskId).forEach(t => {
+  tasks.filter(t => !isSubTask(t)).forEach(t => {
     if (t.phase) {
       if (!byPhase.has(t.phase)) byPhase.set(t.phase, []);
       byPhase.get(t.phase)!.push(t);
@@ -99,6 +112,7 @@ function taskDisplayColor(task: ITask, settings: IGanttDisplaySettings): string 
   if (task.color) return task.color;
   if (settings.colorBy === 'priority') return PRIORITY_COLORS[task.priority] || '#0078D4';
   if (settings.colorBy === 'phase' && task.phase) return phaseColor(task.phase);
+  if (settings.colorBy === 'health') return healthColor(computeTaskHealth(task));
   return STATUS_COLORS[task.status] || '#0078D4';
 }
 
@@ -111,10 +125,10 @@ export function renderGanttSVG(
   const theme = HEADER_THEME_COLORS[settings.headerTheme];
 
   // Date range
-  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const today = todayLocalMidnight();
   const allDates: Date[] = [addDays(today, -14)];
   tasks.forEach(t => {
-    const s = parseDate(t.startDate); const e = parseDate(t.dueDate);
+    const s = parseDateOnly(t.startDate); const e = parseDateOnly(t.dueDate);
     if (s) allDates.push(addDays(s, -7));
     if (e) allDates.push(addDays(e, 14));
   });
@@ -136,7 +150,7 @@ export function renderGanttSVG(
 
   // Project-relative week calculation
   const projectStart = tasks.reduce<Date | null>((acc, t) => {
-    const s = parseDate(t.startDate);
+    const s = parseDateOnly(t.startDate);
     return s && (!acc || s < acc) ? s : acc;
   }, null) || today;
   const projectWeekStart = startOfWeek(projectStart, { weekStartsOn: 1 });
@@ -214,7 +228,7 @@ export function renderGanttSVG(
 
     const task = row.task!;
     const color = taskDisplayColor(task, settings);
-    const sd = parseDate(task.startDate); const ed = parseDate(task.dueDate);
+    const sd = parseDateOnly(task.startDate); const ed = parseDateOnly(task.dueDate);
     const isChild = !!task.parentTaskId;
     const nameX = isChild ? 28 : 16;
 
@@ -263,6 +277,12 @@ export function renderGanttSVG(
       );
     }
 
+    if (settings.showAssignee && task.assignedTo) {
+      bars.push(
+        `<text x="${bx + bw + 6}" y="${by + BAR_H / 2 + 4}" font-family="Segoe UI,sans-serif" font-size="10" fill="#605E5C">${escXml(task.assignedTo)}</text>`
+      );
+    }
+
     // Right panel row line
     bars.push(`<line x1="${LEFT_W}" y1="${y0 + ROW_H}" x2="${LEFT_W + timelineW}" y2="${y0 + ROW_H}" stroke="#F3F2F1" stroke-width="1"/>`);
 
@@ -273,7 +293,7 @@ export function renderGanttSVG(
         if (depIdx === undefined) return;
         const depTask = visRows[depIdx]?.task;
         if (!depTask) return;
-        const depEnd = parseDate(depTask.dueDate);
+        const depEnd = parseDateOnly(depTask.dueDate);
         if (!depEnd) return;
         const fromX = LEFT_W + dateToX(depEnd) + DAY_W;
         const fromY = TITLE_H + HEADER_H + depIdx * ROW_H + ROW_H / 2;
@@ -337,19 +357,8 @@ export function renderGanttSVG(
 </svg>`;
 }
 
-export function downloadSVG(svgString: string, filename: string): void {
-  const blob = new Blob([svgString], { type: 'image/svg+xml' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
 export function downloadPNG(svgString: string, filename: string, scale: number = 2): Promise<void> {
+  filename = safeFileName(filename);
   return svgToCanvas(svgString, scale).then(canvas => new Promise<void>((resolve) => {
     canvas.toBlob(pngBlob => {
       if (!pngBlob) { resolve(); return; }
@@ -406,7 +415,7 @@ export async function exportToPowerPoint(
   settings: IGanttDisplaySettings
 ): Promise<void> {
   const today = new Date();
-  const fmt = (d: string): string => d ? format(new Date(d), 'MMM d, yyyy') : '—';
+  const fmt = (d: string): string => formatDateOnly(d, 'MMM d, yyyy');
   const projectColor = hex(project.color);
 
   const ganttDataUrl = await svgToPngDataUrl(renderGanttSVG(project, tasks, settings), 2);
@@ -686,7 +695,7 @@ export async function exportToPowerPoint(
 
   const weekAgo = addDays(today, -7);
   const recentTasks = tasks.filter(t => {
-    const mod = t.modified ? parseDate(t.modified) : null;
+    const mod = parseTimestamp(t.modified);
     return mod !== null && mod >= weekAgo;
   });
 
@@ -715,7 +724,8 @@ export async function exportToPowerPoint(
       ry += 0.4;
 
       completedThisWeek.slice(0, MAX_PER_SECTION).forEach(t => {
-        const isNew = !!(t.created && parseDate(t.created) !== null && parseDate(t.created)! >= weekAgo);
+        const created = parseTimestamp(t.created);
+        const isNew = created !== null && created >= weekAgo;
         const titleRuns = isNew
           ? [{ text: 'NEW  ', options: { color: '107C10', bold: true, fontSize: 9 } },
              { text: t.title, options: { color: '323130', fontSize: 12 } }]
@@ -757,7 +767,8 @@ export async function exportToPowerPoint(
       ry += 0.4;
 
       updatedThisWeek.slice(0, MAX_PER_SECTION).forEach(t => {
-        const isNew = !!(t.created && parseDate(t.created) !== null && parseDate(t.created)! >= weekAgo);
+        const created = parseTimestamp(t.created);
+        const isNew = created !== null && created >= weekAgo;
         const dotColor = hex(STATUS_COLORS[t.status] || STATUS_COLORS['Not Started']);
         const titleRuns = isNew
           ? [{ text: 'NEW  ', options: { color: dotColor, bold: true, fontSize: 9 } },
@@ -787,7 +798,7 @@ export async function exportToPowerPoint(
     }
   }
 
-  await pptx.writeFile({ fileName: `${project.title} - Project Report.pptx` });
+  await pptx.writeFile({ fileName: `${safeFileName(project.title)} - Project Report.pptx` });
 }
 
 // ─── Portfolio exports ────────────────────────────────────────────────────────
@@ -806,7 +817,7 @@ export function exportPortfolioToExcel(
   projects: IProject[],
   statsMap: Map<number, IProjectTaskStats> | null
 ): void {
-  const fmt = (d: string): string => (d ? format(new Date(d), 'MM/dd/yyyy') : '');
+  const fmt = (d: string): string => formatDateOnly(d, 'MM/dd/yyyy', '');
 
   const rows = projects.map(p => {
     const s = statsMap?.get(p.id);
@@ -842,7 +853,7 @@ export async function exportPortfolioToPowerPoint(
   statsMap: Map<number, IProjectTaskStats> | null
 ): Promise<void> {
   const today = new Date();
-  const fmt = (d: string): string => (d ? format(new Date(d), 'MMM d, yyyy') : '—');
+  const fmt = (d: string): string => formatDateOnly(d, 'MMM d, yyyy');
   const ACCENT = '0078D4';
 
   // Aggregate health counts

@@ -1,9 +1,10 @@
 import * as React from 'react';
-import { format, addDays, startOfDay, differenceInCalendarDays } from 'date-fns';
+import { addDays, differenceInCalendarDays } from 'date-fns';
 import {
   IProject, ITask, TaskStatus,
   STATUS_COLORS, STATUS_LIGHT_COLORS, PRIORITY_COLORS, phaseColor,
 } from '../../models';
+import { parseDateOnly, formatDateOnly, todayLocalMidnight } from '../../utils/dateUtils';
 
 interface IDashboardViewProps {
   project: IProject;
@@ -12,15 +13,15 @@ interface IDashboardViewProps {
   onAddTask: () => void;
 }
 
-function parseDate(s: string): Date | null {
-  if (!s) return null;
-  const d = new Date(s);
-  return isNaN(d.getTime()) ? null : startOfDay(d);
+function fmtDate(s: string): string {
+  return formatDateOnly(s, 'MMM d');
 }
 
-function fmtDate(s: string): string {
-  const d = parseDate(s);
-  return d ? format(d, 'MMM d') : '—';
+// Modified/Created are real timestamps (not schedule dates) — parse directly.
+function parseTimestamp(s: string): Date | null {
+  if (!s) return null;
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
 }
 
 // ── Stat card ──────────────────────────────────────────────────────────────
@@ -110,7 +111,7 @@ const TaskRow: React.FC<{ task: ITask; onClick: () => void; showDue?: boolean; i
 export const DashboardView: React.FC<IDashboardViewProps> = ({
   project, tasks, onEditTask, onAddTask,
 }) => {
-  const today = startOfDay(new Date());
+  const today = todayLocalMidnight();
   const in14 = addDays(today, 14);
   const weekAgo = addDays(today, -7);
 
@@ -141,22 +142,22 @@ export const DashboardView: React.FC<IDashboardViewProps> = ({
 
   // ── Time-based groups ────────────────────────────────────────────────────
   const recentlyModified = tasks.filter(t => {
-    const mod = t.modified ? parseDate(t.modified) : null;
+    const mod = parseTimestamp(t.modified);
     return mod !== null && mod >= weekAgo && t.status !== 'Completed';
   }).slice(0, 6);
 
   const recentlyCompleted = tasks.filter(t => {
-    const mod = t.modified ? parseDate(t.modified) : null;
+    const mod = parseTimestamp(t.modified);
     return mod !== null && mod >= weekAgo && t.status === 'Completed';
   }).slice(0, 4);
 
   const upcoming = tasks.filter(t => {
-    const due = parseDate(t.dueDate);
+    const due = parseDateOnly(t.dueDate);
     return due !== null && due >= today && due <= in14 && t.status !== 'Completed' && t.status !== 'Cancelled';
   }).sort((a, b) => (a.dueDate > b.dueDate ? 1 : -1)).slice(0, 6);
 
   const overdue = tasks.filter(t => {
-    const due = parseDate(t.dueDate);
+    const due = parseDateOnly(t.dueDate);
     return due !== null && due < today && t.status !== 'Completed' && t.status !== 'Cancelled';
   }).sort((a, b) => (a.dueDate < b.dueDate ? 1 : -1)).slice(0, 6);
 
@@ -308,7 +309,7 @@ export const DashboardView: React.FC<IDashboardViewProps> = ({
             <div style={{ background: '#fff', borderRadius: 8, border: '1px solid #EDEBE9', padding: '16px 20px' }}>
               <SectionHeader title={`Due in next 14 days  (${upcoming.length})`} />
               {upcoming.map(t => {
-                const due = parseDate(t.dueDate)!;
+                const due = parseDateOnly(t.dueDate)!;
                 const daysLeft = differenceInCalendarDays(due, today);
                 return (
                   <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, cursor: 'pointer', padding: '6px 8px', borderRadius: 5 }}

@@ -1,11 +1,11 @@
 import * as React from 'react';
-import { format } from 'date-fns';
 import {
   ITask, IProject, TaskStatus, TaskPriority,
   STATUS_COLORS, STATUS_LIGHT_COLORS, PRIORITY_COLORS,
   TASK_STATUS_OPTIONS, TASK_PRIORITY_OPTIONS,
 } from '../../models';
-import { computeTaskHealth } from '../../utils/healthUtils';
+import { computeTaskHealth, hasDependencyViolation } from '../../utils/healthUtils';
+import { parseDateOnly, formatDateOnly, todayLocalMidnight } from '../../utils/dateUtils';
 import { HealthBadge } from '../common/HealthBadge';
 import styles from './ListView.module.scss';
 
@@ -19,21 +19,13 @@ interface IListViewProps {
   onAddTask: () => void;
 }
 
-type SortField = 'title' | 'startDate' | 'dueDate' | 'status' | 'priority' | 'assignedTo' | 'percentComplete' | 'phase';
+type SortField = 'sortOrder' | 'title' | 'startDate' | 'dueDate' | 'status' | 'priority' | 'assignedTo' | 'percentComplete' | 'phase';
 type SortDir = 'asc' | 'desc';
-
-function formatDate(s: string): string {
-  if (!s) return '—';
-  try {
-    return format(new Date(s), 'MMM d, yyyy');
-  } catch {
-    return '—';
-  }
-}
 
 function isOverdue(task: ITask): boolean {
   if (!task.dueDate || task.status === 'Completed' || task.status === 'Cancelled') return false;
-  return new Date(task.dueDate) < new Date();
+  const due = parseDateOnly(task.dueDate);
+  return !!due && due < todayLocalMidnight();
 }
 
 function initials(name: string): string {
@@ -51,36 +43,55 @@ function stringToColor(s: string): string {
 export const ListView: React.FC<IListViewProps> = ({
   tasks, showHealthBadges = true, onEditTask, onDeleteTask, onTaskUpdate, onAddTask,
 }) => {
-  const [sortField, setSortField] = React.useState<SortField>('sortOrder' as any);
+  const [sortField, setSortField] = React.useState<SortField>('sortOrder');
   const [sortDir, setSortDir] = React.useState<SortDir>('asc');
 
   const handleSort = (field: SortField): void => {
     if (sortField === field) {
-      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+      // asc → desc → back to manual order
+      if (sortDir === 'asc') {
+        setSortDir('desc');
+      } else {
+        setSortField('sortOrder');
+        setSortDir('asc');
+      }
     } else {
       setSortField(field);
       setSortDir('asc');
     }
   };
 
+  const violationIds = React.useMemo(() => {
+    const set = new Set<number>();
+    tasks.forEach(t => { if (hasDependencyViolation(t, tasks)) set.add(t.id); });
+    return set;
+  }, [tasks]);
+
   const sortedTasks = React.useMemo(() => {
-    const top = tasks.filter(t => !t.parentTaskId);
+    const ids = new Set(tasks.map(t => t.id));
+    // Only nest under a parent that's actually present; orphaned/filtered-out
+    // parents must not make their sub-tasks disappear.
+    const isSubTask = (t: ITask): boolean => !!t.parentTaskId && ids.has(t.parentTaskId);
+    const top = tasks.filter(t => !isSubTask(t));
     const children = new Map<number, ITask[]>();
-    tasks.filter(t => t.parentTaskId).forEach(t => {
+    tasks.filter(isSubTask).forEach(t => {
       if (!children.has(t.parentTaskId!)) children.set(t.parentTaskId!, []);
       children.get(t.parentTaskId!)!.push(t);
     });
 
     const sortFn = (a: ITask, b: ITask): number => {
-      let av: any = (a as any)[sortField] || '';
-      let bv: any = (b as any)[sortField] || '';
+      let cmp: number;
       if (sortField === 'startDate' || sortField === 'dueDate') {
-        av = av ? new Date(av).getTime() : 0;
-        bv = bv ? new Date(bv).getTime() : 0;
+        const av = parseDateOnly(a[sortField])?.getTime() ?? 0;
+        const bv = parseDateOnly(b[sortField])?.getTime() ?? 0;
+        cmp = av - bv;
+      } else if (sortField === 'percentComplete' || sortField === 'sortOrder') {
+        cmp = a[sortField] - b[sortField];
+      } else {
+        cmp = String(a[sortField] ?? '').localeCompare(String(b[sortField] ?? ''), undefined, { sensitivity: 'base' });
       }
-      if (av < bv) return sortDir === 'asc' ? -1 : 1;
-      if (av > bv) return sortDir === 'asc' ? 1 : -1;
-      return 0;
+      if (cmp === 0) cmp = a.id - b.id;
+      return sortDir === 'asc' ? cmp : -cmp;
     };
 
     // Group by phase
@@ -95,19 +106,18 @@ export const ListView: React.FC<IListViewProps> = ({
       }
     });
 
-    const rows: Array<{ type: 'task' | 'phase'; task?: ITask; phase?: string }> = [];
+    const rows: Array<{ type: 'task' | 'phase'; task?: ITask; phase?: string; isChild?: boolean }> = [];
+
+    const pushTask = (t: ITask): void => {
+      rows.push({ type: 'task', task: t, isChild: false });
+      (children.get(t.id) || []).sort(sortFn).forEach(c => rows.push({ type: 'task', task: c, isChild: true }));
+    };
 
     byPhase.forEach((pTasks, phase) => {
       rows.push({ type: 'phase', phase });
-      [...pTasks].sort(sortFn).forEach(t => {
-        rows.push({ type: 'task', task: t });
-        (children.get(t.id) || []).sort(sortFn).forEach(c => rows.push({ type: 'task', task: c }));
-      });
+      [...pTasks].sort(sortFn).forEach(pushTask);
     });
-    [...noPhase].sort(sortFn).forEach(t => {
-      rows.push({ type: 'task', task: t });
-      (children.get(t.id) || []).sort(sortFn).forEach(c => rows.push({ type: 'task', task: c }));
-    });
+    [...noPhase].sort(sortFn).forEach(pushTask);
 
     return rows;
   }, [tasks, sortField, sortDir]);
@@ -117,6 +127,8 @@ export const ListView: React.FC<IListViewProps> = ({
       className={sortField === field ? styles.sorted : ''}
       onClick={() => handleSort(field)}
       style={width ? { width } : undefined}
+      role="columnheader"
+      aria-sort={sortField === field ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
       {label}
       {sortField === field && (
@@ -168,7 +180,7 @@ export const ListView: React.FC<IListViewProps> = ({
               if (row.type === 'phase') {
                 return (
                   <tr key={`phase-${row.phase}`} className={styles.phaseGroupRow}>
-                    <td colSpan={9}>
+                    <td colSpan={showHealthBadges ? 10 : 9}>
                       <span className={styles.phaseGroupCell}>▸ {row.phase}</span>
                     </td>
                   </tr>
@@ -176,7 +188,7 @@ export const ListView: React.FC<IListViewProps> = ({
               }
 
               const task = row.task!;
-              const isChild = !!task.parentTaskId;
+              const isChild = !!row.isChild;
               const overdue = isOverdue(task);
 
               return (
@@ -198,6 +210,14 @@ export const ListView: React.FC<IListViewProps> = ({
                       >
                         {task.title}
                       </span>
+                      {violationIds.has(task.id) && (
+                        <span
+                          title="Started before all dependencies were completed"
+                          style={{ color: '#CA5010', fontSize: 12, flexShrink: 0 }}
+                        >
+                          ⚠
+                        </span>
+                      )}
                     </div>
                   </td>
 
@@ -206,7 +226,16 @@ export const ListView: React.FC<IListViewProps> = ({
                     <select
                       className={styles.inlineSelect}
                       value={task.status}
-                      onChange={e => onTaskUpdate(task.id, { status: e.target.value as TaskStatus })}
+                      aria-label={`Status of ${task.title}`}
+                      onChange={e => {
+                        const status = e.target.value as TaskStatus;
+                        const updates: Partial<ITask> = { status };
+                        // Keep % complete consistent with status, matching the
+                        // behavior of the task panel and Kanban drop.
+                        if (status === 'Completed' && task.percentComplete < 100) updates.percentComplete = 100;
+                        if (status === 'Not Started' && task.percentComplete > 0) updates.percentComplete = 0;
+                        onTaskUpdate(task.id, updates);
+                      }}
                       style={{
                         background: STATUS_LIGHT_COLORS[task.status],
                         color: STATUS_COLORS[task.status],
@@ -234,6 +263,7 @@ export const ListView: React.FC<IListViewProps> = ({
                     <select
                       className={styles.inlineSelect}
                       value={task.priority}
+                      aria-label={`Priority of ${task.title}`}
                       onChange={e => onTaskUpdate(task.id, { priority: e.target.value as TaskPriority })}
                       style={{
                         color: PRIORITY_COLORS[task.priority],
@@ -248,13 +278,13 @@ export const ListView: React.FC<IListViewProps> = ({
 
                   {/* Start */}
                   <td>
-                    <span className={styles.dateCell}>{formatDate(task.startDate)}</span>
+                    <span className={styles.dateCell}>{formatDateOnly(task.startDate, 'MMM d, yyyy')}</span>
                   </td>
 
                   {/* Due */}
                   <td>
                     <span className={`${styles.dateCell} ${overdue ? styles.overdue : ''}`}>
-                      {formatDate(task.dueDate)}
+                      {formatDateOnly(task.dueDate, 'MMM d, yyyy')}
                       {overdue && ' ⚠'}
                     </span>
                   </td>
@@ -266,6 +296,7 @@ export const ListView: React.FC<IListViewProps> = ({
                         <div
                           className={styles.avatarCircle}
                           style={{ background: stringToColor(task.assignedTo) }}
+                          title={task.assignedTo}
                         >
                           {initials(task.assignedTo)}
                         </div>
@@ -306,6 +337,7 @@ export const ListView: React.FC<IListViewProps> = ({
                         className={styles.rowActionBtn}
                         onClick={() => onEditTask(task)}
                         title="Edit"
+                        aria-label={`Edit task ${task.title}`}
                       >
                         ✏
                       </button>
@@ -313,6 +345,7 @@ export const ListView: React.FC<IListViewProps> = ({
                         className={`${styles.rowActionBtn} ${styles.deleteBtn}`}
                         onClick={() => onDeleteTask(task.id)}
                         title="Delete"
+                        aria-label={`Delete task ${task.title}`}
                       >
                         ✕
                       </button>

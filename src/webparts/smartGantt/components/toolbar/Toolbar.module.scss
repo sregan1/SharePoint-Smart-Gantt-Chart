@@ -56,6 +56,15 @@
   flex-shrink: 0;
 }
 
+/* ── Row 3: search + filters ───────────────────────────────────────────────── */
+.row3 {
+  display: flex;
+  align-items: center;
+  padding: 4px 16px 8px;
+  border-top: 1px solid #EDEBE9;
+  min-height: 36px;
+}
+
 /* ── Shared divider ──────────────────────────────────────────────────────────  */
 .divider {
   width: 1px;

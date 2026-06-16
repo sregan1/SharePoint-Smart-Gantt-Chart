@@ -10,7 +10,7 @@ export type ImportableField = keyof Pick<
   ITask,
   | 'title' | 'startDate' | 'dueDate' | 'status' | 'priority'
   | 'assignedTo' | 'assignedToEmail' | 'percentComplete'
-  | 'phase' | 'description' | 'notes' | 'isMilestone'
+  | 'phase' | 'description' | 'notes' | 'isMilestone' | 'dependencies'
 > | 'skip';
 
 export interface IImportableFieldDef {
@@ -32,6 +32,7 @@ export const IMPORTABLE_FIELDS: IImportableFieldDef[] = [
   { key: 'description', label: 'Description' },
   { key: 'notes', label: 'Notes' },
   { key: 'isMilestone', label: 'Is Milestone' },
+  { key: 'dependencies', label: 'Dependencies' },
   { key: 'skip', label: 'Skip this column' },
 ];
 
@@ -80,6 +81,7 @@ registerAlias(['phase', 'category', 'group', 'bucket', 'sprint', 'iteration', 'e
 registerAlias(['description', 'task description', 'detail', 'details', 'desc'], 'description');
 registerAlias(['notes', 'comments', 'comment', 'remarks', 'note', 'annotation'], 'notes');
 registerAlias(['milestone', 'is milestone', 'key milestone', 'milestone?', 'ismilestone'], 'isMilestone');
+registerAlias(['dependencies', 'depends on', 'predecessors', 'predecessor', 'prerequisite', 'prerequisites', 'blockers', 'blocked by'], 'dependencies');
 
 function autoMap(headers: string[]): ColumnMapping {
   const mapping: ColumnMapping = {};
@@ -255,6 +257,14 @@ export function applyMapping(
           case 'description': task.description = raw; break;
           case 'notes': task.notes = raw; break;
           case 'isMilestone': task.isMilestone = raw ? normalizeBoolean(raw) : false; break;
+          case 'dependencies': {
+            // If the value is all numeric IDs (e.g. MS Project row numbers), apply now.
+            // Name-based deps (e.g. "Task Title 1, Task Title 2") are resolved
+            // post-import by resolveDependencies() once SharePoint IDs are known.
+            const ids = raw.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n) && n > 0);
+            if (ids.length > 0) task.dependencies = ids;
+            break;
+          }
         }
       });
       return task;
@@ -428,4 +438,79 @@ export async function batchImport(
   }
 
   return result;
+}
+
+// ─── Post-import dependency resolution ───────────────────────────────────────
+//
+// Dependencies stored in Excel as task names (e.g. "Design Review, UX Wireframes")
+// can't be converted to SharePoint IDs at mapping time because the IDs don't exist
+// yet.  Call this after batchImport() to do a second pass: fetch all newly-created
+// tasks, build a title→id map, and update each task's Dependencies field.
+
+export async function resolveDependencies(
+  spService: SharePointService,
+  listName: string,
+  rows: Record<string, string>[],
+  mapping: ColumnMapping
+): Promise<void> {
+  const depCol = Object.keys(mapping).find(k => mapping[k] === 'dependencies');
+  const titleCol = Object.keys(mapping).find(k => mapping[k] === 'title');
+  if (!depCol || !titleCol) return;
+
+  const rowsWithDeps = rows.filter(r => r[depCol]?.trim());
+  if (rowsWithDeps.length === 0) return;
+
+  const allTasks = await spService.getProjectTasks(listName);
+
+  // Build a case-insensitive title → SP id map
+  const titleToId = new Map<string, number>();
+  allTasks.forEach(t => titleToId.set(t.title.toLowerCase().trim(), t.id));
+
+  // Also build a 1-based row-number → SP id map so MS Project-style numeric
+  // predecessor columns ("3", "5") resolve correctly.
+  const rowToId = new Map<number, number>();
+  rows.forEach((row, idx) => {
+    const title = (row[titleCol] ?? '').toLowerCase().trim();
+    const id = titleToId.get(title);
+    if (id !== undefined) rowToId.set(idx + 1, id);
+  });
+
+  const updates: Array<{ taskId: number; deps: number[] }> = [];
+
+  rows.forEach(row => {
+    const rawTitle = (row[titleCol] ?? '').trim();
+    const rawDeps = (row[depCol] ?? '').trim();
+    if (!rawTitle || !rawDeps) return;
+
+    const taskId = titleToId.get(rawTitle.toLowerCase());
+    if (taskId === undefined) return;
+
+    const depIds: number[] = [];
+    rawDeps.split(',').forEach(part => {
+      const name = part.trim();
+      if (!name) return;
+
+      // Pure integer → treat as 1-based row number (MS Project style)
+      const rowNum = parseInt(name, 10);
+      if (!isNaN(rowNum) && String(rowNum) === name && rowNum > 0) {
+        const id = rowToId.get(rowNum);
+        if (id !== undefined) depIds.push(id);
+        return;
+      }
+
+      // Otherwise match by task title (case-insensitive)
+      const id = titleToId.get(name.toLowerCase());
+      if (id !== undefined) depIds.push(id);
+    });
+
+    if (depIds.length > 0) updates.push({ taskId, deps: depIds });
+  });
+
+  if (updates.length === 0) return;
+
+  await Promise.all(
+    updates.map(({ taskId, deps }) =>
+      spService.updateTask(listName, taskId, { dependencies: deps })
+    )
+  );
 }

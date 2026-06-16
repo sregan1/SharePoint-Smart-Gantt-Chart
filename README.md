@@ -20,6 +20,7 @@ A SharePoint Framework (SPFx) web part for project management with five views �
 - **Gantt Chart** — Custom SVG timeline with drag-to-move, drag-to-resize, dependency arrows, phase grouping, zoom levels (Day / Week / Month / Quarter), and a today indicator
 - **List View** — Sortable, Excel-style grid with inline status and priority editing, overdue highlighting, progress bars, and health badges
 - **Kanban Board** — Drag-and-drop cards across status columns (Not Started → In Progress → On Hold → Completed → Cancelled), with health badges on each card
+- **Task Filter Bar** — Third toolbar row with text search, multi-select Status / Priority / Assignee / Phase filters, and a due-date filter (Overdue / Due Today / Due in 7 days). Active filters persist across view switches; a match count and one-click Clear keep filtering fast
 - **Project management** — Each project gets its own SharePoint list with 15 pre-built columns (status, priority, dates, assignee, % complete, phase, milestones, dependencies, and more)
 - **Display settings** — Customize colors (including by health), header theme, week numbering, bar style, row height, and show/hide toggles including health badges
 - **Export** — Download tasks as Excel, export a full PowerPoint project report (cover, summary, Gantt chart, and recent activity), or save the Gantt as a high-resolution PNG
@@ -101,7 +102,7 @@ Click **⚙ Options** in the toolbar (visible when a project is selected) to ope
 | **Header Color** | Dark (default), Navy, Teal, Purple, Light |
 | **Week Numbering** | ISO weeks (W23, W24…) or Project-relative (W1, W2, W3… from the first task's start date) |
 | **Bar Style** | Gradient or Flat |
-| **Row Height** | Compact (32px), Normal (40px), Spacious (52px) |
+| **Row Height** | Compact (36px), Normal (40px), Spacious (52px) |
 | **Show / Hide** | Weekend shading, dependency arrows, progress % on bars, assignee name on bars, **health status badges** |
 
 Settings are applied live and remembered for the session.
@@ -341,6 +342,7 @@ Two ready-to-import `.xlsx` files are included in [`docs/sample-data/`](docs/sam
 |---|---|---|---|
 | `Tech-Conference-Tasks.xlsx` | Annual tech conference planning, conference days Oct 1–2 2026 | Planning, Content, Logistics, Marketing | 25 |
 | `Website-Rollout-Tasks.xlsx` | Corporate website redesign and launch project | Discovery, Design, Build, Launch | 20 |
+| `ERP-Implementation-Tasks.xlsx` | Cloud ERP implementation (Finance + HR modules), Apr–Oct 2026 | Discovery & Planning, Design & Configuration, Data Migration, Build & Integration, Testing & Training, Go-Live & Hypercare | 31 |
 
 Import either file via **⋯ menu → Import Tasks…** — all columns are named to match Smart Gantt's auto-mapping, so no manual column mapping is required.
 

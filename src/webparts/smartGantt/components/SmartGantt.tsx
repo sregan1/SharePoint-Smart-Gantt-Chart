@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { WebPartContext } from '@microsoft/sp-webpart-base';
 import {
-  Spinner, SpinnerSize, Dialog, DialogType, DialogFooter,
+  Spinner, SpinnerSize, Stack, Dialog, DialogType, DialogFooter,
   DefaultButton, PrimaryButton, MessageBar, MessageBarType,
 } from '@fluentui/react';
 
@@ -61,6 +61,7 @@ interface ISmartGanttState {
   showArchivedProjects: boolean;
   scrollToToday: boolean;
   showImportPanel: boolean;
+  showImportAsProject: boolean;
   showGanttSettings: boolean;
   ganttSettings: IGanttDisplaySettings;
   taskFilter: ITaskFilter;
@@ -99,8 +100,9 @@ export default class SmartGantt extends React.Component<ISmartGanttProps, ISmart
       showArchivedProjects: prefs.showArchivedProjects || false,
       scrollToToday: false,
       showImportPanel: false,
+      showImportAsProject: false,
       showGanttSettings: false,
-      ganttSettings: { ...DEFAULT_GANTT_SETTINGS, ...prefs.ganttSettings },
+      ganttSettings: { ...DEFAULT_GANTT_SETTINGS, ...prefs.ganttSettings, showDependencies: true },
       taskFilter: EMPTY_TASK_FILTER,
       portfolioStats: null,
       portfolioLoading: false,
@@ -454,7 +456,7 @@ export default class SmartGantt extends React.Component<ISmartGanttProps, ISmart
       showProjectPanel, editingProject,
       showTaskPanel, editingTask,
       deleteProjectConfirm, deleteTaskConfirm, archiveProjectConfirm, showArchivedProjects,
-      scrollToToday, showImportPanel, showGanttSettings, ganttSettings,
+      scrollToToday, showImportPanel, showImportAsProject, showGanttSettings, ganttSettings,
       taskFilter, portfolioStats, portfolioLoading,
     } = this.state;
 
@@ -489,6 +491,7 @@ export default class SmartGantt extends React.Component<ISmartGanttProps, ISmart
           hasArchivedProjects={hasArchivedProjects}
           onToggleShowArchived={() => this.setState(s => ({ showArchivedProjects: !s.showArchivedProjects }))}
           onImport={() => this.setState({ showImportPanel: true })}
+          onImportAsProject={() => this.setState({ showImportAsProject: true })}
           onExportExcel={() => { if (selectedProject) exportTasksToExcel(selectedProject, tasks); }}
           onExportImage={this._handleExportImage}
           onExportPowerPoint={this._handleExportPowerPoint}
@@ -536,7 +539,13 @@ export default class SmartGantt extends React.Component<ISmartGanttProps, ISmart
               <div className={styles.emptySubtitle}>
                 Create your first project to start managing tasks with Gantt charts, lists, and Kanban boards.
               </div>
-              <PrimaryButton text="+ Create First Project" onClick={this._handleAddProject} />
+              <Stack horizontal tokens={{ childrenGap: 10 }} horizontalAlign="center">
+                <PrimaryButton text="+ Create First Project" onClick={this._handleAddProject} />
+                <DefaultButton
+                  text="Import from Excel…"
+                  onClick={() => this.setState({ showImportAsProject: true })}
+                />
+              </Stack>
             </div>
           )}
 
@@ -659,7 +668,7 @@ export default class SmartGantt extends React.Component<ISmartGanttProps, ISmart
           />
         )}
 
-        {/* Import Panel */}
+        {/* Import Panel — import into existing project */}
         {selectedProject && (
           <ImportPanel
             isOpen={showImportPanel}
@@ -673,6 +682,18 @@ export default class SmartGantt extends React.Component<ISmartGanttProps, ISmart
             }}
           />
         )}
+
+        {/* Import Panel — create a new project from file */}
+        <ImportPanel
+          isOpen={showImportAsProject}
+          spService={this.props.spService}
+          context={this.props.context}
+          onDismiss={() => this.setState({ showImportAsProject: false })}
+          onImportComplete={(newProject) => {
+            this.setState({ showImportAsProject: false });
+            if (newProject) void this._loadProjects(newProject.id);
+          }}
+        />
 
         {/* Delete task confirm */}
         <Dialog

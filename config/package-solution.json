@@ -3,7 +3,7 @@
   "solution": {
     "name": "SharePoint Smart Gantt Chart",
     "id": "9af3fbcc-c71c-4a19-8506-e1b2a2d76742",
-    "version": "1.2.0.0",
+    "version": "1.2.1.0",
     "includeClientSideAssets": true,
     "skipFeatureDeployment": true,
     "isDomainIsolated": false,

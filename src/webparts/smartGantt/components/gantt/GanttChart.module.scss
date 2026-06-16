@@ -64,6 +64,7 @@
   align-items: stretch;
   background: #1B1B3A;
   height: 56px;
+  box-sizing: border-box;
   padding: 0 12px;
   flex-shrink: 0;
   border-bottom: 1px solid rgba(255,255,255,0.1);
@@ -99,6 +100,7 @@
   display: flex;
   align-items: center;
   height: 40px;
+  box-sizing: border-box;
   padding: 0 12px;
   border-bottom: 1px solid #F3F2F1;
   cursor: pointer;

@@ -24,6 +24,7 @@ interface IToolbarProps {
   hasArchivedProjects: boolean;
   onToggleShowArchived: () => void;
   onImport: () => void;
+  onImportAsProject: () => void;
   onExportExcel: () => void;
   onExportImage: () => void;
   onExportPowerPoint: () => void;
@@ -58,6 +59,7 @@ export const Toolbar: React.FC<IToolbarProps> = ({
   hasArchivedProjects,
   onToggleShowArchived,
   onImport,
+  onImportAsProject,
   onExportExcel,
   onExportImage,
   onExportPowerPoint,
@@ -174,6 +176,9 @@ export const Toolbar: React.FC<IToolbarProps> = ({
                 <div className={styles.calloutItem} onClick={() => { setProjectCalloutVisible(false); onAddProject(); }}>
                   + New Project
                 </div>
+                <div className={styles.calloutItem} onClick={() => { setProjectCalloutVisible(false); onImportAsProject(); }}>
+                  📥&ensp;Import File as New Project…
+                </div>
               </div>
             </Callout>
           )}
@@ -261,18 +266,7 @@ export const Toolbar: React.FC<IToolbarProps> = ({
                   </button>
                 ))}
               </div>
-              <div className={styles.divider} />
             </>
-          )}
-          {selectedProject && totalCount > 0 && (
-            <FilterBar
-              filter={taskFilter}
-              onChange={onFilterChange}
-              assignees={knownUsers}
-              phases={knownPhases}
-              matchCount={filteredCount}
-              totalCount={totalCount}
-            />
           )}
         </div>
 
@@ -348,6 +342,20 @@ export const Toolbar: React.FC<IToolbarProps> = ({
           )}
         </div>
       </div>}
+
+      {/* ── Row 3: search + filters (own row so they have room to breathe) ── */}
+      {viewMode !== 'portfolio' && selectedProject && totalCount > 0 && (
+        <div className={styles.row3}>
+          <FilterBar
+            filter={taskFilter}
+            onChange={onFilterChange}
+            assignees={knownUsers}
+            phases={knownPhases}
+            matchCount={filteredCount}
+            totalCount={totalCount}
+          />
+        </div>
+      )}
     </div>
   );
 };

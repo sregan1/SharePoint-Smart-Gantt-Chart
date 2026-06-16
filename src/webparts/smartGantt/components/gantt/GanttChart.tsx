@@ -549,17 +549,45 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
         const offset2 = dragOffsets.get(task.id);
         const taskStart = offset2 ? offset2.start : (parseDateOnly(task.startDate) || today);
 
-        const fromX = dateToX(depEnd) + dayWidth;
-        const fromY = depIndex * ROW_H + ROW_H / 2;
-        const toX = dateToX(taskStart);
+        const toX = dateToX(taskStart) - 2;
         const toY = rowIndex * ROW_H + ROW_H / 2;
-        const midX = fromX + (toX - fromX) / 2;
         const isCritical = criticalIds.has(task.id) && criticalIds.has(depId);
+
+        const routePad = Math.max(dayWidth * 0.6, 10);
+        let pathD: string;
+        if (dep.isMilestone) {
+          // Use startDate so mx matches where the diamond is actually rendered (renderBar uses startDate).
+          const milestoneDate = offset ? offset.start : (parseDateOnly(dep.startDate) || depEnd);
+          const mx = dateToX(milestoneDate) + dayWidth / 2;
+          const my = depIndex * ROW_H + ROW_H / 2;
+          const myBottom = my + MILESTONE_SIZE;
+          if (toX > mx) {
+            // Target is to the right: straight down from bottom tip, then right into middle-left of bar.
+            pathD = `M ${mx} ${myBottom} V ${toY} H ${toX}`;
+          } else {
+            // Same-date or backward: drop straight down into the top of the bar (arrowhead points ↓).
+            const barTopY = rowIndex * ROW_H + (ROW_H - BAR_HEIGHT) / 2 - 2;
+            pathD = `M ${mx} ${myBottom} V ${barTopY}`;
+          }
+        } else {
+          const fromX = dateToX(depEnd) + dayWidth;
+          const fromY = depIndex * ROW_H + ROW_H / 2;
+          if (toX >= fromX) {
+            // Forward: elbow right→down→right into middle-left of bar.
+            const midX = fromX + (toX - fromX) / 2;
+            pathD = `M ${fromX} ${fromY} H ${midX} V ${toY} H ${toX}`;
+          } else {
+            // Backward: horizontal routing lane sits in the mid-gap between rows (0.5×ROW_H
+            // above/below the target centre) so it never overlaps the target bar.
+            const overshoot = toY >= fromY ? toY - ROW_H * 0.5 : toY + ROW_H * 0.5;
+            pathD = `M ${fromX} ${fromY} H ${fromX + routePad} V ${overshoot} H ${toX - routePad} V ${toY} H ${toX}`;
+          }
+        }
 
         arrows.push(
           <path
             key={`dep-${dep.id}-${task.id}`}
-            d={`M ${fromX} ${fromY} C ${midX} ${fromY}, ${midX} ${toY}, ${toX} ${toY}`}
+            d={pathD}
             className={styles.dependencyArrow}
             style={{
               markerEnd: `url(#${uid}-arrow${isCritical ? '-crit' : ''})`,
@@ -827,11 +855,11 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
               onMouseLeave={() => setTooltip(null)}
             >
               <defs>
-                <marker id={`${uid}-arrow`} markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-                  <polygon points="0 0, 8 3, 0 6" fill="#8A8886" />
+                <marker id={`${uid}-arrow`} markerWidth="4" markerHeight="3" refX="3.5" refY="1.5" orient="auto">
+                  <polygon points="0 0, 4 1.5, 0 3" fill="#8A8886" />
                 </marker>
-                <marker id={`${uid}-arrow-crit`} markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-                  <polygon points="0 0, 8 3, 0 6" fill="#D13438" />
+                <marker id={`${uid}-arrow-crit`} markerWidth="4" markerHeight="3" refX="3.5" refY="1.5" orient="auto">
+                  <polygon points="0 0, 4 1.5, 0 3" fill="#D13438" />
                 </marker>
               </defs>
 

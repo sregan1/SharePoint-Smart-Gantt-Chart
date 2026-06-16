@@ -11,6 +11,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.1] - 2026-06-16
+
+### Changed
+
+- **Dependency arrow routing** — all connector lines now use orthogonal (90°) paths exclusively for a clean, consistent layout matching professional Gantt tools:
+  - **Forward dependencies** — replaced smooth S-curves (cubic Bézier) with a right-angle elbow: right to the midpoint between the two bars, drop straight down to the target row, then right into the bar
+  - **Backward/overlapping dependencies** — routing lane sits in the mid-gap between adjacent rows (50% of row height above/below target center), never overlapping the bar; corrected routing to approach from outside the row rather than passing through it
+  - **Milestone dependencies** — arrow exits from the bottom tip of the diamond, drops straight down to the target row, then travels right into the bar (two segments max); same-date or backward dependencies drop straight into the top of the bar with a downward arrowhead
+  - **Arrowhead** — reduced in size for a less dominant appearance at all zoom levels
+- **Compact row height** — increased from 32 → 36 px, giving dependency routing lanes 5 px clearance from each adjacent bar (vs. 3 px previously)
+
+### Fixed
+
+- **Gantt / left-panel row alignment** — added `box-sizing: border-box` to `.taskRow` and `.leftHeader` so the 1 px `border-bottom` is counted within the declared height, eliminating progressive vertical drift between the task-name list and the SVG timeline that accumulated over many rows
+- **Milestone arrow origin** — arrow now uses `startDate` (matching where `renderBar` draws the diamond) instead of `dueDate`; fixes the arrow appearing displaced to the right when a milestone's start and due dates differ
+
+---
+
+## [1.2.0] - 2026-06-13
+
+### Added
+
+- **Task Filter Bar** — a new third toolbar row that appears when a project has tasks. Six controls let you narrow the visible task list in real time:
+  - **Search** — text input that matches against task names (case-insensitive)
+  - **Status** — multi-select chip dropdown (Not Started · In Progress · Completed · On Hold · Cancelled)
+  - **Priority** — multi-select chip dropdown (Critical · High · Medium · Low)
+  - **Assignee** — multi-select chip dropdown; appears only when the project has assigned tasks
+  - **Phase** — multi-select chip dropdown; appears only when the project has phases
+  - **Due date** — single-select dropdown: *Any due date*, *Overdue*, *Due today*, *Due in 7 days*
+  - Active filter chips are highlighted in blue with a count badge; a **match count** (e.g. "5 of 20") appears when any filter is active; a **✕ Clear filters** button resets everything at once
+  - Filter state persists when switching between Gantt, List, Kanban, and Dashboard views; exports always use the full unfiltered task list
+- **`FilterBar` component** (`src/webparts/smartGantt/components/toolbar/FilterBar.tsx`) — self-contained filter UI using Fluent UI `Callout` and `Checkbox`; `MultiChip` sub-component for multi-select dropdowns
+- **`filterUtils.ts`** (`src/webparts/smartGantt/utils/filterUtils.ts`) — pure utility module: `filterTasks(tasks, filter)` and `isFilterActive(filter)`; no React dependency
+- **`dateUtils.ts`** (`src/webparts/smartGantt/utils/dateUtils.ts`) — pure date utility functions extracted from component code for reuse across views
+- **`ITaskFilter` interface** and **`DueFilter` type** added to `models/index.ts`; `EMPTY_TASK_FILTER` constant for safe initialization; `isFilterActive` re-exported from models
+
+### Changed
+
+- **Toolbar** — adds a Row 3 (`styles.row3`) that renders `FilterBar` when `viewMode !== 'portfolio'`, a project is selected, and `totalCount > 0`; `filteredCount` and `totalCount` props added
+- **`SmartGantt.tsx`** — `taskFilter` and `portfolioStats` state added; `filterTasks()` applied before rendering views so all four views (Gantt, List, Kanban, Dashboard) receive the filtered task set
+- **GanttChart** — rendering and interaction improvements
+- **ListView** — updated to consume filtered tasks passed from root; column and layout refinements
+- **KanbanView** — updated to consume filtered tasks; card and column improvements
+- **DashboardView** — updated to consume filtered tasks; stats recalculated from filtered set
+- **SharePointService** — query and field-selection improvements across project and task operations
+- **ImportService** — column mapping and import reliability improvements
+
+---
+
 ## [1.1.0] - 2026-06-08
 
 ### Added
@@ -72,6 +121,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Guest user support** — Microsoft 365 B2B guests with Site Member permission can view and edit tasks in existing projects.
 - SPFx 1.20.0 · React 17 · Fluent UI 8 · PnPjs 3 · SheetJS · date-fns · pptxgenjs.
 
-[Unreleased]: https://github.com/sharepointsmartsolutions/SharePointSmartGanttChart/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/sharepointsmartsolutions/SharePointSmartGanttChart/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/sharepointsmartsolutions/SharePointSmartGanttChart/compare/v1.2.0...v1.2.1
+[1.2.0]: https://github.com/sharepointsmartsolutions/SharePointSmartGanttChart/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/sharepointsmartsolutions/SharePointSmartGanttChart/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/sharepointsmartsolutions/SharePointSmartGanttChart/releases/tag/v1.0.0

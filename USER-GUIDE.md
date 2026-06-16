@@ -1,4 +1,4 @@
-# Smart Gantt Chart — User Guide · v1.1.0
+# Smart Gantt Chart — User Guide · v1.2.1
 
 ---
 
@@ -7,16 +7,18 @@
 1. [Getting Started](#1-getting-started)
 2. [Creating Your First Project](#2-creating-your-first-project)
 3. [Adding and Editing Tasks](#3-adding-and-editing-tasks)
-4. [Gantt Chart View](#4-gantt-chart-view)
-5. [List View](#5-list-view)
-6. [Kanban View](#6-kanban-view)
-7. [Portfolio View](#7-portfolio-view)
-8. [Health Status Indicators](#8-health-status-indicators)
-9. [Display Settings](#9-display-settings)
-10. [Exporting](#10-exporting)
-11. [Importing Tasks](#11-importing-tasks)
-12. [Working with Multiple Projects](#12-working-with-multiple-projects) (archive, unarchive, delete)
-13. [Tips and Tricks](#13-tips-and-tricks)
+4. [Filtering Tasks](#4-filtering-tasks)
+5. [Gantt Chart View](#5-gantt-chart-view)
+6. [List View](#6-list-view)
+7. [Kanban View](#7-kanban-view)
+8. [Dashboard View](#8-dashboard-view)
+9. [Portfolio View](#9-portfolio-view)
+10. [Health Status Indicators](#10-health-status-indicators)
+11. [Display Settings](#11-display-settings)
+12. [Exporting](#12-exporting)
+13. [Importing Tasks](#13-importing-tasks)
+14. [Working with Multiple Projects](#14-working-with-multiple-projects) (archive, unarchive, delete)
+15. [Tips and Tricks](#15-tips-and-tricks)
 
 ---
 
@@ -144,7 +146,37 @@ Click **+ Add Task** in the toolbar. The task panel slides in from the right wit
 
 ---
 
-## 4. Gantt Chart View
+## 4. Filtering Tasks
+
+The **Filter Bar** appears as a third row in the toolbar whenever a project has at least one task. It works across all views — Gantt, List, Kanban, and Dashboard — and any active filters stay in place when you switch between views.
+
+### Filter controls
+
+| Control | What it filters |
+|---|---|
+| **Search tasks…** | Text input — hides any task whose name does not contain the typed text (case-insensitive) |
+| **Status** | Multi-select dropdown — show only tasks with the chosen statuses |
+| **Priority** | Multi-select dropdown — show only tasks with the chosen priorities |
+| **Assignee** | Multi-select dropdown — show only tasks assigned to the selected people (appears when the project has any assigned tasks) |
+| **Phase** | Multi-select dropdown — show only tasks in the selected phases (appears when the project has any phases) |
+| **Due** | Dropdown — filter by due date: *Any due date*, *Overdue*, *Due today*, or *Due in 7 days* |
+
+### Reading the filter bar
+
+- Active filters are highlighted in **blue** with the filter name and a count (e.g., **Status (2)**).
+- When any filter is active, a **match count** appears to the right of the controls (e.g., *5 of 20*).
+- Click **✕ Clear filters** to reset everything at once.
+- Click an active chip's count badge to open its dropdown and adjust the selection.
+
+### Tips
+
+- Combine filters — for example, search for "design" and set Status to "In Progress" to find only in-progress design tasks.
+- Use the **Overdue** due filter with Color Coding set to **By Health** to instantly spot problem tasks.
+- Filters do not affect exports — the full task list is always exported regardless of what is currently filtered.
+
+---
+
+## 5. Gantt Chart View
 
 The Gantt view is the heart of the web part. Switch to it using the **Gantt** button in the view switcher on the second toolbar row.
 
@@ -200,11 +232,11 @@ Tasks with the same Phase value are grouped under a labeled section header. Clic
 
 ### Dependencies
 
-When a task is set to depend on another, a curved arrow is drawn from the end of the predecessor bar to the start of the dependent task. These are informational — moving bars does not automatically enforce date constraints.
+When a task is set to depend on another, an orthogonal connector line is drawn from the predecessor bar to the start of the dependent task. Lines use only horizontal and vertical segments — right-angle elbows for forward dependencies, and routed paths that stay between rows for backward dependencies. These are informational — moving bars does not automatically enforce date constraints.
 
 ---
 
-## 5. List View
+## 6. List View
 
 The List view shows all tasks in a spreadsheet-style grid. Switch to it using the **List** button in the view switcher.
 
@@ -227,7 +259,7 @@ Changes save to SharePoint in the background. No need to open the task panel for
 |---|---|
 | Task Name | Colored dot shows status; ◆ indicates a milestone; sub-tasks are indented |
 | Status | Color-coded badge; click to change inline |
-| Health | Automatic On Track / At Risk / Overdue badge — see [Health Status Indicators](#8-health-status-indicators) |
+| Health | Automatic On Track / At Risk / Overdue badge — see [Health Status Indicators](#10-health-status-indicators) |
 | Priority | Click to change inline |
 | Start / Due | Due dates shown in red if overdue |
 | Assigned To | Avatar + first name |
@@ -236,7 +268,7 @@ Changes save to SharePoint in the background. No need to open the task panel for
 
 ---
 
-## 6. Kanban View
+## 7. Kanban View
 
 The Kanban view organizes tasks as cards across five status columns. Switch to it using the **Kanban** button in the view switcher.
 
@@ -267,14 +299,32 @@ Each card shows:
 - **Task name** (click to open the task panel)
 - Status and priority tags
 - Phase tag (if set)
-- **Health badge** — On Track, At Risk, Overdue, or Done (see [Health Status Indicators](#8-health-status-indicators))
+- **Health badge** — On Track, At Risk, Overdue, or Done (see [Health Status Indicators](#10-health-status-indicators))
 - Start → Due date (Due date shown in red if overdue)
 - Progress bar
 - Assignee avatar (initials, color-coded by name)
 
 ---
 
-## 7. Portfolio View
+## 8. Dashboard View
+
+The Dashboard view gives you a quick snapshot of a single project's health and recent activity. Switch to it using the **Dashboard** button in the view switcher.
+
+### What it shows
+
+- **Summary stats** — task counts broken down by status (Not Started, In Progress, Completed, On Hold, Cancelled) and by health (On Track, At Risk, Overdue, Done)
+- **Overall progress** — a project-level progress bar based on average % complete across all tasks
+- **Recent activity** — a feed of tasks that were completed or updated recently, with assignee and due date
+
+### When to use it
+
+The Dashboard is most useful at the start of a status meeting or a weekly check-in when you want a one-screen summary before diving into the detailed Gantt or List view.
+
+> **Tip:** Combine the Dashboard with the Filter Bar — for example, filter by Assignee to see a summary scoped to one team member's tasks before your one-on-one.
+
+---
+
+## 9. Portfolio View
 
 The Portfolio view gives you a bird's-eye view of all your projects — health, progress, and task counts — without switching between them one at a time.
 
@@ -314,7 +364,7 @@ Click **↻ Refresh** to reload stats for all projects. Stats are also refreshed
 
 ---
 
-## 8. Health Status Indicators
+## 10. Health Status Indicators
 
 Health status is **computed automatically** from task dates and % complete. It is not a field you set — it updates in real time as task data changes.
 
@@ -344,7 +394,7 @@ Open **⚙ Options** → **Show / Hide** → toggle **Health status badges**. Wh
 
 ---
 
-## 9. Display Settings
+## 11. Display Settings
 
 Click **⚙ Options** on the toolbar (visible when a project is selected) to open the settings panel. Changes apply instantly — no save button needed.
 
@@ -399,7 +449,7 @@ Project weeks count from the Monday of or before the earliest task start date.
 
 ---
 
-## 10. Exporting
+## 12. Exporting
 
 All export options are in the **⋯ menu** (top-right of the toolbar, when a project is selected).
 
@@ -443,9 +493,11 @@ The export:
 3. Set **Bar Style** to Flat for cleaner printing
 4. Set **Row Height** to Compact to fit more tasks in the image
 
+> **Note:** Exports always include the full task list. Active filters in the Filter Bar do not affect what is exported.
+
 ---
 
-## 11. Importing Tasks
+## 13. Importing Tasks
 
 Use import to bring existing tasks into a project. Access it from the **⋯ menu** → **Import Tasks…**
 
@@ -508,7 +560,7 @@ This is a one-time step for the entire tenant.
 
 ---
 
-## 12. Working with Multiple Projects
+## 14. Working with Multiple Projects
 
 The **project selector dropdown** (top-left of the toolbar) is your hub for navigating between projects. Click it to see:
 
@@ -518,7 +570,7 @@ The **project selector dropdown** (top-left of the toolbar) is your hub for navi
 
 Each project is stored in its own SharePoint list, so tasks from different projects are completely separate. There is no cross-project dependency linking.
 
-**To see an overview of all projects:** Select **⊞ Portfolio** from the dropdown. See [Portfolio View](#7-portfolio-view) for details.
+**To see an overview of all projects:** Select **⊞ Portfolio** from the dropdown. See [Portfolio View](#9-portfolio-view) for details.
 
 **To rename or update a project:** Select the project, then click **Edit Project** in the toolbar (or use the **⋯** menu → **Edit Project**).
 
@@ -530,7 +582,7 @@ Each project is stored in its own SharePoint list, so tasks from different proje
 
 ---
 
-## 13. Tips and Tricks
+## 15. Tips and Tricks
 
 **Keep Phase names consistent**
 The Phase field autocompletes from existing values in the project. Using the same spelling every time ensures tasks are grouped correctly on the Gantt. A typo like "Desgin" instead of "Design" creates a separate group.
@@ -570,3 +622,9 @@ Health status checks whether your actual progress matches the time elapsed. A ta
 
 **Turn off health badges before exporting for a cleaner image**
 If the health badges feel visually busy in an export or presentation, open **⚙ Options → Show / Hide** and toggle off **Health status badges** before exporting to PNG or PowerPoint.
+
+**Use the Filter Bar to focus a large project**
+On projects with 50+ tasks, use the Filter Bar (third toolbar row) to narrow down to what matters. Filter by Assignee before a one-on-one, by Phase during a sprint review, or by Due → Overdue for your daily triage. The filter state persists as you switch between Gantt, List, Kanban, and Dashboard views.
+
+**Combine filters for surgical precision**
+Filters stack — set Status to "In Progress", Phase to "Build", and Due to "Due in 7 days" to see exactly which active build tasks need attention this week. Click **✕ Clear filters** to reset everything at once.

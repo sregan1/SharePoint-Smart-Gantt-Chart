@@ -45,13 +45,13 @@ const TASKS = [
   { id:1, phase:'Discovery', title:'Requirements Gathering', status:'Completed',   pct:100, assignee:'Sarah M.', start:'2026-05-15', end:'2026-05-27', priority:'High'   },
   { id:2, phase:'Discovery', title:'Stakeholder Interviews',  status:'Completed',   pct:100, assignee:'John S.',  start:'2026-05-18', end:'2026-05-29', priority:'Medium' },
   { id:3, phase:'Discovery', title:'Current State Analysis',  status:'In Progress', pct:75,  assignee:'Sarah M.', start:'2026-05-28', end:'2026-06-06', priority:'High'   },
-  { id:4, phase:'Design',    title:'UX Wireframes',           status:'In Progress', pct:40,  assignee:'Amy K.',   start:'2026-06-03', end:'2026-06-17', priority:'Medium' },
+  { id:4, phase:'Design',    title:'UX Wireframes',           status:'In Progress', pct:40,  assignee:'Amy K.',   start:'2026-06-03', end:'2026-06-17', priority:'Medium', deps:[1,2] },
   { id:5, phase:'Design',    title:'Visual Design',           status:'Not Started', pct:0,   assignee:'Amy K.',   start:'2026-06-10', end:'2026-06-24', priority:'Medium' },
-  { id:6, phase:'Design',    title:'Design Review',           status:'Not Started', pct:0,   assignee:'',         start:'2026-06-27', end:'2026-06-27', milestone:true,   priority:'High'   },
+  { id:6, phase:'Design',    title:'Design Review',           status:'Not Started', pct:0,   assignee:'',         start:'2026-06-27', end:'2026-06-27', milestone:true,   priority:'High',   deps:[5] },
   { id:7, phase:'Development', title:'Frontend Build',        status:'Not Started', pct:0,   assignee:'Mike R.',  start:'2026-06-26', end:'2026-07-17', priority:'Medium' },
   { id:8, phase:'Development', title:'API Integration',       status:'Not Started', pct:0,   assignee:'Dave C.',  start:'2026-07-08', end:'2026-07-23', priority:'High'   },
-  { id:9, phase:'Development', title:'QA Testing',            status:'Not Started', pct:0,   assignee:'Sarah M.', start:'2026-07-21', end:'2026-08-04', priority:'Medium' },
-  { id:10, phase:'Development', title:'Go Live',              status:'Not Started', pct:0,   assignee:'',         start:'2026-08-07', end:'2026-08-07', milestone:true,   priority:'Critical' },
+  { id:9, phase:'Development', title:'QA Testing',            status:'Not Started', pct:0,   assignee:'Sarah M.', start:'2026-07-21', end:'2026-08-04', priority:'Medium', deps:[7,8] },
+  { id:10, phase:'Development', title:'Go Live',              status:'Not Started', pct:0,   assignee:'',         start:'2026-08-07', end:'2026-08-07', milestone:true,   priority:'Critical', deps:[9] },
 ];
 
 // ── Colors ─────────────────────────────────────────────────────────────────
@@ -164,9 +164,41 @@ function ganttSVG() {
     bars.push(`<line x1="${LW}" y1="${y0+RH}" x2="${LW+TW}" y2="${y0+RH}" stroke="#F3F2F1" stroke-width="1"/>`);
   });
 
+  // Dependency arrows
+  const taskById2 = new Map(TASKS.map(t => [t.id, t]));
+  const rowIdxById = new Map();
+  rows.forEach((row, i) => { if (row.type === 'task') rowIdxById.set(row.task.id, i); });
+  const arrowPaths = [];
+  TASKS.forEach(task => {
+    if (!task.deps || !task.deps.length) return;
+    const taskRowIdx = rowIdxById.get(task.id);
+    if (taskRowIdx === undefined) return;
+    const toX = task.milestone
+      ? LW + days(new Date(task.start))*D + D/2 - 9
+      : LW + days(new Date(task.start))*D;
+    const toY = TH + HH + taskRowIdx*RH + RH/2;
+    task.deps.forEach(depId => {
+      const dep = taskById2.get(depId);
+      if (!dep) return;
+      const depRowIdx = rowIdxById.get(depId);
+      if (depRowIdx === undefined) return;
+      const fromX = dep.milestone
+        ? LW + days(new Date(dep.start))*D + D/2 + 9
+        : LW + (days(new Date(dep.end))+1)*D;
+      const fromY = TH + HH + depRowIdx*RH + RH/2;
+      const midX = fromX + (toX - fromX)/2;
+      arrowPaths.push(`<path d="M ${fromX} ${fromY} C ${midX} ${fromY}, ${midX} ${toY}, ${toX} ${toY}" stroke="#8A8886" stroke-width="1.5" fill="none" marker-end="url(#dep-arrow)"/>`);
+    });
+  });
+
   const theme = { bg:'#1B1B3A', text:'rgba(255,255,255,0.9)', sub:'rgba(255,255,255,0.55)' };
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" style="background:white;font-family:'Segoe UI',Arial,sans-serif">
+  <defs>
+    <marker id="dep-arrow" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+      <polygon points="0 0, 7 2.5, 0 5" fill="#8A8886"/>
+    </marker>
+  </defs>
   <!-- title bar -->
   <rect width="${W}" height="${TH}" fill="${PROJECT.color}"/>
   <circle cx="24" cy="${TH/2}" r="7" fill="white" opacity="0.25"/>
@@ -194,6 +226,7 @@ function ganttSVG() {
   <!-- body -->
   <rect y="${TH+HH}" width="${W}" height="${bodyH}" fill="white"/>
   ${weekendRects.join('\n  ')}
+  ${arrowPaths.join('\n  ')}
   ${bars.join('\n  ')}
 
   <!-- divider -->

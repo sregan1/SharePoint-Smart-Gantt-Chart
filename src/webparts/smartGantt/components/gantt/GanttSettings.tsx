@@ -47,7 +47,7 @@ export const GanttSettings: React.FC<IGanttSettingsProps> = ({
   ];
 
   const heights: { value: number; label: string; barH: number }[] = [
-    { value: 32, label: 'Compact',  barH: 3 },
+    { value: 36, label: 'Compact',  barH: 3 },
     { value: 40, label: 'Normal',   barH: 5 },
     { value: 52, label: 'Spacious', barH: 7 },
   ];

@@ -61,6 +61,11 @@ export const ListView: React.FC<IListViewProps> = ({
     }
   };
 
+  const taskById = React.useMemo(
+    () => new Map(tasks.map(t => [t.id, t])),
+    [tasks]
+  );
+
   const violationIds = React.useMemo(() => {
     const set = new Set<number>();
     tasks.forEach(t => { if (hasDependencyViolation(t, tasks)) set.add(t.id); });
@@ -172,6 +177,7 @@ export const ListView: React.FC<IListViewProps> = ({
               <SortTh field="assignedTo" label="Assigned To" width={140} />
               <SortTh field="percentComplete" label="Progress" width={140} />
               <SortTh field="phase" label="Phase" width={110} />
+              <th style={{ width: 160 }}>Predecessors</th>
               <th style={{ width: 72 }} />
             </tr>
           </thead>
@@ -180,7 +186,7 @@ export const ListView: React.FC<IListViewProps> = ({
               if (row.type === 'phase') {
                 return (
                   <tr key={`phase-${row.phase}`} className={styles.phaseGroupRow}>
-                    <td colSpan={showHealthBadges ? 10 : 9}>
+                    <td colSpan={showHealthBadges ? 11 : 10}>
                       <span className={styles.phaseGroupCell}>▸ {row.phase}</span>
                     </td>
                   </tr>
@@ -327,6 +333,15 @@ export const ListView: React.FC<IListViewProps> = ({
                   <td>
                     <span style={{ fontSize: 12, color: '#605E5C' }}>
                       {task.phase || '—'}
+                    </span>
+                  </td>
+
+                  {/* Predecessors */}
+                  <td style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontSize: 12, color: '#605E5C' }} title={task.dependencies.map(id => taskById.get(id)?.title ?? `#${id}`).join(', ')}>
+                      {task.dependencies.length > 0
+                        ? task.dependencies.map(id => taskById.get(id)?.title ?? `#${id}`).join(', ')
+                        : '—'}
                     </span>
                   </td>
 

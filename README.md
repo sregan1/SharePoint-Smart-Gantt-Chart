@@ -24,7 +24,7 @@ A SharePoint Framework (SPFx) web part for project management with five views �
 - **Project management** — Each project gets its own SharePoint list with 15 pre-built columns (status, priority, dates, assignee, % complete, phase, milestones, dependencies, and more)
 - **Display settings** — Customize colors (including by health), header theme, week numbering, bar style, row height, and show/hide toggles including health badges
 - **Export** — Download tasks as Excel, export a full PowerPoint project report (cover, summary, Gantt chart, and recent activity), or save the Gantt as a high-resolution PNG
-- **Import** — Bring in tasks from Excel/CSV files (including MS Project exports) or directly from Microsoft Planner, with a column-mapping screen for non-standard headers
+- **Import** — Bring in tasks from Excel/CSV files (including MS Project exports) or directly from Microsoft Planner, with a column-mapping screen for non-standard headers; or create a brand new project directly from an import file via the project selector dropdown
 - **Autocomplete** — Phase and Assigned To fields suggest values already used in the project
 
 ---
@@ -64,6 +64,7 @@ A SharePoint Framework (SPFx) web part for project management with five views �
 - Click any column header to sort ascending/descending
 - Change status or priority inline via dropdown — saves to SharePoint immediately
 - **Health** column shows an automatic On Track / At Risk / Overdue badge for each task
+- **Predecessors** column shows the names of tasks each row depends on
 - Overdue tasks highlighted in red
 - Phase group rows visually separate tasks
 - Subtasks indented under their parent
@@ -103,7 +104,7 @@ Click **⚙ Options** in the toolbar (visible when a project is selected) to ope
 | **Week Numbering** | ISO weeks (W23, W24…) or Project-relative (W1, W2, W3… from the first task's start date) |
 | **Bar Style** | Gradient or Flat |
 | **Row Height** | Compact (36px), Normal (40px), Spacious (52px) |
-| **Show / Hide** | Weekend shading, dependency arrows, progress % on bars, assignee name on bars, **health status badges** |
+| **Show / Hide** | Weekend shading, dependency arrows (with sub-options: *Critical path always visible* and *All others on hover only*), critical path highlight, progress % on bars, assignee name on bars, **health status badges** |
 
 Settings are applied live and remembered for the session.
 
@@ -298,7 +299,10 @@ The web part creates and manages two types of lists on the current site:
 
 ## Importing Tasks
 
-Access import from the **⋯ menu** → **Import Tasks…**
+**Two import paths:**
+
+- **Import File as New Project** — click the project selector dropdown → **📥 Import File as New Project…** to create a new project directly from an Excel or CSV file
+- **Import Tasks into an existing project** — access from the **⋯ menu** → **Import Tasks…**
 
 ### From Excel or CSV
 

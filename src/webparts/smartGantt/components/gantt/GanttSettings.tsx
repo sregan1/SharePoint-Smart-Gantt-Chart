@@ -160,9 +160,30 @@ export const GanttSettings: React.FC<IGanttSettingsProps> = ({
         {/* ── Toggles ───────────────────────────────────────────────────── */}
         <div className={styles.section}>
           <div className={styles.sectionTitle}>Show / Hide</div>
+          {([['showWeekends', 'Weekend shading']] as const).map(([key, label]) => (
+            <div key={key} className={styles.toggleRow}>
+              <span className={styles.toggleLabel}>{label}</span>
+              <Toggle checked={settings[key]} onChange={(_, v) => set(key, !!v)} styles={{ root: { margin: 0 } }} />
+            </div>
+          ))}
+          <div className={styles.toggleRow}>
+            <span className={styles.toggleLabel}>Dependency arrows</span>
+            <Toggle checked={settings.showDependencies} onChange={(_, v) => set('showDependencies', !!v)} styles={{ root: { margin: 0 } }} />
+          </div>
+          {settings.showDependencies && (
+            <>
+              {([
+                ['showCriticalPathOnly', 'Critical path always visible'],
+                ['dependenciesOnHover',  'All others on hover only'],
+              ] as const).map(([key, label]) => (
+                <div key={key} className={styles.toggleRow} style={{ paddingLeft: 20 }}>
+                  <span className={styles.toggleLabel} style={{ color: '#605E5C' }}>{label}</span>
+                  <Toggle checked={settings[key]} onChange={(_, v) => set(key, !!v)} styles={{ root: { margin: 0 } }} />
+                </div>
+              ))}
+            </>
+          )}
           {([
-            ['showWeekends',     'Weekend shading'],
-            ['showDependencies', 'Dependency arrows'],
             ['showCriticalPath', 'Critical path highlight'],
             ['showProgressText', 'Progress % on bars'],
             ['showAssignee',     'Assignee name on bars'],
@@ -170,11 +191,7 @@ export const GanttSettings: React.FC<IGanttSettingsProps> = ({
           ] as const).map(([key, label]) => (
             <div key={key} className={styles.toggleRow}>
               <span className={styles.toggleLabel}>{label}</span>
-              <Toggle
-                checked={settings[key] as boolean}
-                onChange={(_, v) => set(key, !!v)}
-                styles={{ root: { margin: 0 } }}
-              />
+              <Toggle checked={settings[key] as boolean} onChange={(_, v) => set(key, !!v)} styles={{ root: { margin: 0 } }} />
             </div>
           ))}
         </div>

@@ -11,7 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.2.1] - 2026-06-16
+## [1.2.1] - 2026-06-17
+
+### Added
+
+- **Import File as New Project** — new entry in the project selector dropdown (📥 Import File as New Project…) that opens the import panel in project-creation mode; creates a new project automatically from an Excel or CSV file without requiring a project to exist first
+- **Predecessors column in List View** — shows the names of predecessor tasks each task depends on; displays "—" for tasks with no dependencies; falls back to `#id` if a referenced task has been deleted
+- **Dependency arrow visibility controls** — two new sub-options under the "Dependency arrows" Show/Hide toggle (only visible when Dependency arrows is on):
+  - **Critical path always visible** — critical path arrows are permanently drawn regardless of hover state; critical path is now computed whenever this option is on, even if "Critical path highlight" is off
+  - **All others on hover only** — non-critical dependency arrows only appear when hovering a task bar; hovering always reveals all dependency arrows for that task regardless of the critical-path filter; both options default to on for cleaner views on dense MS Project imports
 
 ### Changed
 
@@ -26,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Gantt / left-panel row alignment** — added `box-sizing: border-box` to `.taskRow` and `.leftHeader` so the 1 px `border-bottom` is counted within the declared height, eliminating progressive vertical drift between the task-name list and the SVG timeline that accumulated over many rows
 - **Milestone arrow origin** — arrow now uses `startDate` (matching where `renderBar` draws the diamond) instead of `dueDate`; fixes the arrow appearing displaced to the right when a milestone's start and due dates differ
+- **Web part component ID** — updated to a new GUID to allow clean re-deployment when a conflicting prior version exists in the SharePoint App Catalog
 
 ---
 

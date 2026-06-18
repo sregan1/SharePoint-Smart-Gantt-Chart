@@ -265,6 +265,7 @@ Changes save to SharePoint in the background. No need to open the task panel for
 | Assigned To | Avatar + first name |
 | Progress | Mini progress bar + percentage |
 | Phase | Phase label |
+| Predecessors | Names of tasks this task depends on; "—" if none |
 
 ---
 
@@ -442,7 +443,10 @@ Project weeks count from the Monday of or before the earliest task start date.
 | Toggle | What it controls |
 |---|---|
 | Weekend shading | Light gray stripe on Saturday/Sunday columns |
-| Dependency arrows | Curved arrows between predecessor and successor tasks |
+| Dependency arrows | Orthogonal connector lines between predecessor and successor tasks; two sub-options appear when this is on: |
+| ↳ Critical path always visible | Critical path arrows are always drawn on the chart — visible even without hovering |
+| ↳ All others on hover only | Non-critical dependency arrows only appear when you hover over a task bar; hovering always reveals all dependency arrows for that task regardless of this setting |
+| Critical path highlight | Colors critical path task bars and arrows in red |
 | Progress % on bars | Shows e.g. "40%" inside the task bar |
 | Assignee name on bars | Shows the assignee's name inside or beside the bar |
 | Health status badges | On Track / At Risk / Overdue badges in List, Kanban, and Gantt tooltip |
@@ -499,7 +503,17 @@ The export:
 
 ## 13. Importing Tasks
 
-Use import to bring existing tasks into a project. Access it from the **⋯ menu** → **Import Tasks…**
+There are two import paths depending on whether you already have a project or want to create one from a file.
+
+### Import File as New Project
+
+Click the **project selector dropdown** (top-left of the toolbar) → **📥 Import File as New Project…** to create a brand new project directly from an Excel or CSV file. The import panel opens in "create" mode — it will prompt you for a project name and create the project automatically when you complete the import.
+
+Use this path when you are starting fresh from a spreadsheet or MS Project export and do not yet have a project in Smart Gantt.
+
+### Import Tasks into an Existing Project
+
+Use import to bring tasks into an existing project. Access it from the **⋯ menu** → **Import Tasks…**
 
 The import panel walks you through four steps:
 

@@ -1,6 +1,6 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/spfx/client-side-web-part-manifest.schema.json",
-  "id": "c7d2e3f4-a5b6-4c7d-8e9f-0a1b2c3d4e5f",
+  "id": "419b3cee-3f5c-4b46-9ac6-f31f08c75db8",
   "alias": "SmartGanttWebPart",
   "componentType": "WebPart",
   "version": "*",

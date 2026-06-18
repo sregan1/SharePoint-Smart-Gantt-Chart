@@ -132,8 +132,8 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
   }, [tasks]);
 
   const criticalIds = React.useMemo(
-    () => (settings.showCriticalPath ? computeCriticalPath(tasks) : new Set<number>()),
-    [tasks, settings.showCriticalPath]
+    () => (settings.showCriticalPath || settings.showCriticalPathOnly ? computeCriticalPath(tasks) : new Set<number>()),
+    [tasks, settings.showCriticalPath, settings.showCriticalPathOnly]
   );
 
   const violationIds = React.useMemo(() => {
@@ -552,6 +552,16 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
         const toX = dateToX(taskStart) - 2;
         const toY = rowIndex * ROW_H + ROW_H / 2;
         const isCritical = criticalIds.has(task.id) && criticalIds.has(depId);
+
+        const isHovered = tooltip?.task?.id === task.id || tooltip?.task?.id === depId;
+        // Critical path arrows are always visible when showCriticalPathOnly is on.
+        // Hovering reveals all arrows regardless of critical path setting.
+        // Non-critical arrows are hidden in critical-path-only mode unless hovering.
+        // All arrows are hidden when not hovering in hover-only mode.
+        if (settings.showCriticalPathOnly && isCritical) { /* always show */ }
+        else if (settings.dependenciesOnHover && isHovered) { /* hover reveals all */ }
+        else if (settings.showCriticalPathOnly && !isCritical) return;
+        else if (settings.dependenciesOnHover && !isHovered) return;
 
         const routePad = Math.max(dayWidth * 0.6, 10);
         let pathD: string;

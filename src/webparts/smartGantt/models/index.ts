@@ -116,6 +116,8 @@ export interface IGanttDisplaySettings {
   rowHeight: number;
   showWeekends: boolean;
   showDependencies: boolean;
+  showCriticalPathOnly: boolean;
+  dependenciesOnHover: boolean;
   showProgressText: boolean;
   showAssignee: boolean;
   showHealthBadges: boolean;
@@ -130,6 +132,8 @@ export const DEFAULT_GANTT_SETTINGS: IGanttDisplaySettings = {
   rowHeight: 40,
   showWeekends: true,
   showDependencies: true,
+  showCriticalPathOnly: true,
+  dependenciesOnHover: true,
   showProgressText: true,
   showAssignee: false,
   showHealthBadges: true,

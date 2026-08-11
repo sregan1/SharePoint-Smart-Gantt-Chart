@@ -9,6 +9,7 @@
   "main": "lib/index.js",
   "scripts": {
     "build": "gulp bundle",
+    "workbench": "gulp clean && gulp serve",
     "clean": "gulp clean",
     "test": "gulp test",
     "ship": "gulp clean && gulp bundle --ship && gulp package-solution --ship",

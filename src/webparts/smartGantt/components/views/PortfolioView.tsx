@@ -1,10 +1,13 @@
 import * as React from 'react';
 import { Spinner, SpinnerSize } from '@fluentui/react';
 import { differenceInCalendarDays } from 'date-fns';
+import * as strings from 'SmartGanttWebPartStrings';
+import { formatString } from '../localeUtils';
 import { IProject, IProjectTaskStats, PROJECT_STATUS_COLORS, PROJECT_STATUS_LIGHT_COLORS } from '../../models';
 import { HealthBadge } from '../common/HealthBadge';
 import { ProjectHealth } from '../../models';
 import { parseDateOnly, formatDateOnly, todayLocalMidnight } from '../../utils/dateUtils';
+import { getProjectStatusLabel } from '../../utils/taskDisplayUtils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -82,7 +85,7 @@ const MiniTimeline: React.FC<IMiniTimelineProps> = ({ start, end, color }) => {
             borderRadius: 1,
             transform: 'translateX(-50%)',
           }}
-            title="Today"
+            title={strings.Portfolio_TodayTooltip}
           />
         )}
       </div>
@@ -143,7 +146,7 @@ const ProjectCard: React.FC<IProjectCardProps> = ({ project, stats, statsLoading
               fontSize: 11,
               fontWeight: 600,
             }}>
-              {project.status}
+              {getProjectStatusLabel(project.status)}
             </span>
             {stats && !stats.statsError && <HealthBadge health={stats.health} size="md" />}
             {stats?.statsError && (
@@ -151,7 +154,7 @@ const ProjectCard: React.FC<IProjectCardProps> = ({ project, stats, statsLoading
                 display: 'inline-block', padding: '2px 8px', borderRadius: 10,
                 background: '#FDF3F4', color: '#D13438', fontSize: 11, fontWeight: 600,
               }}>
-                Stats unavailable
+                {strings.Portfolio_StatsUnavailable}
               </span>
             )}
           </div>
@@ -183,12 +186,12 @@ const ProjectCard: React.FC<IProjectCardProps> = ({ project, stats, statsLoading
         <div style={{ height: 32, background: '#F3F2F1', borderRadius: 4, animation: 'pulse 1.5s ease-in-out infinite' }} />
       ) : stats?.statsError ? (
         <div style={{ fontSize: 12, color: '#605E5C', padding: '8px 0' }}>
-          Could not load task stats for this project — permissions or a network issue may be blocking access.
+          {strings.Portfolio_StatsUnavailableDetail}
         </div>
       ) : stats ? (
         <>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#605E5C', marginBottom: 4 }}>
-            <span>Overall Progress</span>
+            <span>{strings.Portfolio_OverallProgressLabel}</span>
             <span style={{ fontWeight: 600, color: '#1B1B1B' }}>{stats.overallPct}%</span>
           </div>
           <div style={{ height: 8, background: '#EDEBE9', borderRadius: 4, overflow: 'hidden', marginBottom: 12 }}>
@@ -209,11 +212,11 @@ const ProjectCard: React.FC<IProjectCardProps> = ({ project, stats, statsLoading
             marginBottom: 4,
           }}>
             {([
-              { label: 'Done', value: stats.completedCount, color: '#107C10' },
-              { label: 'Active', value: stats.inProgressCount, color: '#0078D4' },
-              { label: 'At Risk', value: stats.atRiskCount, color: '#CA5010' },
-              { label: 'Overdue', value: stats.overdueCount, color: '#D13438' },
-            ] as const).map(({ label, value, color }) => (
+              { label: strings.Portfolio_TaskCountDone, value: stats.completedCount, color: '#107C10' },
+              { label: strings.Portfolio_TaskCountActive, value: stats.inProgressCount, color: '#0078D4' },
+              { label: strings.Portfolio_TaskCountAtRisk, value: stats.atRiskCount, color: '#CA5010' },
+              { label: strings.Portfolio_TaskCountOverdue, value: stats.overdueCount, color: '#D13438' },
+            ]).map(({ label, value, color }) => (
               <div key={label} style={{ textAlign: 'center', padding: '6px 4px', background: '#FAF9F8', borderRadius: 6 }}>
                 <div style={{ fontSize: 18, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
                 <div style={{ fontSize: 10, color: '#605E5C', marginTop: 2 }}>{label}</div>
@@ -233,7 +236,7 @@ const ProjectCard: React.FC<IProjectCardProps> = ({ project, stats, statsLoading
       {/* Footer link */}
       <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid #F3F2F1', display: 'flex', justifyContent: 'flex-end' }}>
         <span style={{ fontSize: 12, color: '#0078D4', fontWeight: 600 }}>
-          View Gantt →
+          {strings.Portfolio_ViewGanttLink}
         </span>
       </div>
     </div>
@@ -293,10 +296,10 @@ export const PortfolioView: React.FC<IPortfolioViewProps> = ({
   }, [statsMap]);
 
   const sortOptions: { id: SortKey; label: string }[] = [
-    { id: 'name', label: 'A–Z' },
-    { id: 'health', label: 'Health' },
-    { id: 'status', label: 'Status' },
-    { id: 'completion', label: '% Done' },
+    { id: 'name', label: strings.Portfolio_SortAZ },
+    { id: 'health', label: strings.Portfolio_SortHealth },
+    { id: 'status', label: strings.Portfolio_SortStatus },
+    { id: 'completion', label: strings.Portfolio_SortCompletion },
   ];
 
   return (
@@ -313,28 +316,28 @@ export const PortfolioView: React.FC<IPortfolioViewProps> = ({
         flexWrap: 'wrap',
       }}>
         <div style={{ fontWeight: 600, fontSize: 14, color: '#1B1B1B' }}>
-          {projects.length} Project{projects.length !== 1 ? 's' : ''}
+          {formatString(strings.Portfolio_ProjectCount, { count: projects.length, plural: projects.length !== 1 ? 's' : '' })}
         </div>
 
         {summary && (
           <div style={{ display: 'flex', gap: 12, fontSize: 12 }}>
             {summary.onTrack > 0 && (
-              <span style={{ color: '#0078D4' }}>● {summary.onTrack} On Track</span>
+              <span style={{ color: '#0078D4' }}>● {formatString(strings.Portfolio_OnTrackSummary, { count: summary.onTrack })}</span>
             )}
             {summary.atRisk > 0 && (
-              <span style={{ color: '#CA5010' }}>● {summary.atRisk} At Risk</span>
+              <span style={{ color: '#CA5010' }}>● {formatString(strings.Portfolio_AtRiskSummary, { count: summary.atRisk })}</span>
             )}
             {summary.overdue > 0 && (
-              <span style={{ color: '#D13438' }}>● {summary.overdue} Overdue</span>
+              <span style={{ color: '#D13438' }}>● {formatString(strings.Portfolio_OverdueSummary, { count: summary.overdue })}</span>
             )}
             {summary.complete > 0 && (
-              <span style={{ color: '#107C10' }}>● {summary.complete} Done</span>
+              <span style={{ color: '#107C10' }}>● {formatString(strings.Portfolio_DoneSummary, { count: summary.complete })}</span>
             )}
           </div>
         )}
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 12, color: '#605E5C' }}>Sort:</span>
+          <span style={{ fontSize: 12, color: '#605E5C' }}>{strings.Portfolio_SortLabel}</span>
           {sortOptions.map(o => (
             <button
               key={o.id}
@@ -358,7 +361,7 @@ export const PortfolioView: React.FC<IPortfolioViewProps> = ({
           <button
             onClick={onRefresh}
             disabled={loading}
-            title="Refresh stats"
+            title={strings.Portfolio_RefreshTitle}
             style={{
               padding: '4px 10px',
               borderRadius: 4,
@@ -369,7 +372,7 @@ export const PortfolioView: React.FC<IPortfolioViewProps> = ({
               color: '#605E5C',
             }}
           >
-            {loading ? '⟳' : '↻'} Refresh
+            {loading ? '⟳' : '↻'} {strings.Portfolio_RefreshButton}
           </button>
         </div>
       </div>
@@ -378,14 +381,14 @@ export const PortfolioView: React.FC<IPortfolioViewProps> = ({
       <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
         {loading && !statsMap && (
           <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
-            <Spinner size={SpinnerSize.large} label="Loading project stats…" />
+            <Spinner size={SpinnerSize.large} label={strings.Portfolio_LoadingStats} />
           </div>
         )}
 
         {!loading && projects.length === 0 && (
           <div style={{ textAlign: 'center', padding: 60 }}>
             <div style={{ fontSize: 48, opacity: 0.3, marginBottom: 12 }}>📋</div>
-            <div style={{ fontSize: 16, fontWeight: 600, color: '#323130', marginBottom: 8 }}>No projects yet</div>
+            <div style={{ fontSize: 16, fontWeight: 600, color: '#323130', marginBottom: 8 }}>{strings.Portfolio_EmptyTitle}</div>
             <button
               onClick={onAddProject}
               style={{
@@ -393,7 +396,7 @@ export const PortfolioView: React.FC<IPortfolioViewProps> = ({
                 padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
               }}
             >
-              + Create First Project
+              {strings.Portfolio_CreateFirstProject}
             </button>
           </div>
         )}

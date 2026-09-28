@@ -26,6 +26,8 @@ A SharePoint Framework (SPFx) web part for project management with five views �
 - **Export** — Download tasks as Excel, export a full PowerPoint project report (cover, summary, Gantt chart, and recent activity), or save the Gantt as a high-resolution PNG
 - **Import** — Bring in tasks from Excel/CSV files (including MS Project exports) or directly from Microsoft Planner, with a column-mapping screen for non-standard headers; or create a brand new project directly from an import file via the project selector dropdown. Dependencies (predecessors) are resolved to the correct tasks after import, whether referenced by row number or by title
 - **Autocomplete** — Phase and Assigned To fields suggest values already used in the project
+- **Archiving and Recycle Bin** — archive a project to hide it from the selector and Portfolio without deleting it, or send it to the SharePoint recycle bin (93-day recovery) when it's no longer needed
+- **Localization** — the full interface is translated into 30 languages and automatically follows each user's SharePoint display-language setting, no configuration required
 - **Concurrent-edit protection** — if two people save the same task or project at nearly the same time, the second save is rejected with a clear "changed by someone else" message instead of silently overwriting the first person's changes
 - **Keyboard and touch support** — List column headers, Kanban cards, and toolbar menus are fully keyboard-operable; Gantt bars can be dragged and resized with touch or pen input, not just a mouse
 
@@ -154,6 +156,14 @@ Downloads `<ProjectName> - Project Report.pptx` — a four-slide deck:
 Renders the full Gantt chart — every task, the complete date range, the project title bar, and the current color/theme settings — as a clean 2× high-resolution PNG. No browser window cropping. Suitable for pasting directly into Word or email.
 
 The export uses the current Display Settings, so you can tune colors and layout before exporting.
+
+---
+
+## Language Support
+
+The web part's interface is localized into 30 languages: Arabic, Chinese (Simplified & Traditional), Czech, Danish, Dutch, English, Finnish, French, German, Greek, Hebrew, Hindi, Hungarian, Indonesian, Italian, Japanese, Korean, Norwegian Bokmål, Polish, Portuguese (Brazil & Portugal), Romanian, Russian, Spanish, Swedish, Thai, Turkish, Ukrainian, and Vietnamese.
+
+There's no in-app language switcher — the displayed language automatically follows each user's SharePoint display-language setting (or the site's default language), falling back to English for any unsupported language. Only interface text is translated; user-entered data (task names, descriptions, notes, phase and assignee names) always displays exactly as typed. See [Language Support](USER-GUIDE.md#16-language-support) in the User Guide for details.
 
 ---
 
@@ -383,6 +393,9 @@ src/
     │   └── index.ts                      # IProject, ITask, IGanttDisplaySettings,
     │                                     # TaskHealth, ProjectHealth, IProjectTaskStats,
     │                                     # color constants, theme definitions
+    ├── loc/
+    │   ├── mystrings.d.ts                # ISmartGanttWebPartStrings interface (all loc keys)
+    │   └── en-us.js, de-de.js, ...        # One AMD strings module per locale (30 languages)
     ├── utils/
     │   └── healthUtils.ts                # computeTaskHealth, computeProjectHealth,
     │                                     # healthColor, healthLabel — pure functions, no React
@@ -410,9 +423,10 @@ src/
         ├── common/
         │   ├── AutocompleteField.tsx     # Reusable keyboard-navigable suggestion input
         │   └── HealthBadge.tsx           # On Track / At Risk / Overdue / Done pill badge
-        └── import/
-            ├── ImportPanel.tsx           # 4-step import flow
-            └── ColumnMapper.tsx          # Column mapping UI with auto-map and preview
+        ├── import/
+        │   ├── ImportPanel.tsx           # 4-step import flow
+        │   └── ColumnMapper.tsx          # Column mapping UI with auto-map and preview
+        └── localeUtils.ts                # formatString() token substitution + getEffectiveLocale()
 ```
 
 ---

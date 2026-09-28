@@ -1,11 +1,13 @@
 import * as React from 'react';
+import * as strings from 'SmartGanttWebPartStrings';
+import { formatString } from '../localeUtils';
 import {
   ITask, IProject, TaskStatus,
   STATUS_COLORS, STATUS_LIGHT_COLORS, PRIORITY_COLORS,
 } from '../../models';
 import { computeTaskHealth } from '../../utils/healthUtils';
 import { formatDateOnly } from '../../utils/dateUtils';
-import { isOverdue, initials, stringToColor } from '../../utils/taskDisplayUtils';
+import { isOverdue, initials, stringToColor, getStatusLabel, getPriorityLabel } from '../../utils/taskDisplayUtils';
 import { HealthBadge } from '../common/HealthBadge';
 import styles from './KanbanView.module.scss';
 
@@ -27,10 +29,10 @@ interface IColumn {
 // Colors come from the shared STATUS_COLORS map (models/index.ts) rather
 // than being hardcoded here a second time.
 const COLUMNS: IColumn[] = [
-  { status: 'Not Started', label: 'Not Started' },
-  { status: 'In Progress', label: 'In Progress' },
-  { status: 'On Hold', label: 'On Hold' },
-  { status: 'Completed', label: 'Completed' },
+  { status: 'Not Started', label: strings.Kanban_ColumnNotStarted },
+  { status: 'In Progress', label: strings.Kanban_ColumnInProgress },
+  { status: 'On Hold', label: strings.Kanban_ColumnOnHold },
+  { status: 'Completed', label: strings.Kanban_ColumnCompleted },
 ];
 
 // Left/Right arrow keys step through this same order — drag-and-drop is
@@ -138,7 +140,7 @@ export const KanbanView: React.FC<IKanbanViewProps> = ({
         onDragEnd={handleDragEnd}
         tabIndex={0}
         role="button"
-        aria-label={`${task.title}, ${task.status}. Press Enter to edit, Left or Right arrow to change status.`}
+        aria-label={formatString(strings.Kanban_CardAriaLabel, { taskTitle: task.title, status: getStatusLabel(task.status) })}
         onKeyDown={e => handleCardKeyDown(e, task)}
       >
         {/* Quick actions */}
@@ -146,16 +148,16 @@ export const KanbanView: React.FC<IKanbanViewProps> = ({
           <button
             className={styles.cardActionBtn}
             onClick={e => { e.stopPropagation(); onEditTask(task); }}
-            title="Edit"
-            aria-label={`Edit task ${task.title}`}
+            title={strings.Kanban_EditTitle}
+            aria-label={formatString(strings.Kanban_EditTaskAriaLabel, { taskTitle: task.title })}
           >
             ✏
           </button>
           <button
             className={`${styles.cardActionBtn} ${styles.deleteBtn}`}
             onClick={e => { e.stopPropagation(); onDeleteTask(task.id); }}
-            title="Delete"
-            aria-label={`Delete task ${task.title}`}
+            title={strings.Kanban_DeleteTitle}
+            aria-label={formatString(strings.Kanban_DeleteTaskAriaLabel, { taskTitle: task.title })}
           >
             ✕
           </button>
@@ -166,7 +168,7 @@ export const KanbanView: React.FC<IKanbanViewProps> = ({
           <div
             className={styles.priorityDot}
             style={{ background: PRIORITY_COLORS[task.priority] }}
-            title={task.priority}
+            title={getPriorityLabel(task.priority)}
           />
           {task.isMilestone && <span className={styles.cardMilestoneIcon}>◆</span>}
           <span className={styles.cardTitle} onClick={() => onEditTask(task)}>
@@ -183,7 +185,7 @@ export const KanbanView: React.FC<IKanbanViewProps> = ({
               color: STATUS_COLORS[task.status],
             }}
           >
-            {task.status}
+            {getStatusLabel(task.status)}
           </span>
           <span
             className={styles.cardTag}
@@ -193,7 +195,7 @@ export const KanbanView: React.FC<IKanbanViewProps> = ({
               border: `1px solid ${PRIORITY_COLORS[task.priority]}40`,
             }}
           >
-            {task.priority}
+            {getPriorityLabel(task.priority)}
           </span>
           {task.phase && (
             <span className={styles.cardTag} style={{ background: '#F3F2F1', color: '#605E5C' }}>
@@ -291,7 +293,7 @@ export const KanbanView: React.FC<IKanbanViewProps> = ({
                 className={styles.addCardBtn}
                 onClick={onAddTask}
               >
-                + Add Task
+                {strings.Kanban_AddTaskButton}
               </button>
             </div>
           );
@@ -307,7 +309,7 @@ export const KanbanView: React.FC<IKanbanViewProps> = ({
         >
           <div className={styles.columnHeader}>
             <div className={styles.columnDot} style={{ background: STATUS_COLORS['Cancelled'] }} />
-            <span className={styles.columnTitle}>Cancelled</span>
+            <span className={styles.columnTitle}>{strings.Kanban_ColumnCancelled}</span>
             <span className={styles.columnCount}>{cancelledTasks.length}</span>
           </div>
           <div className={styles.cardList}>

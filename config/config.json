@@ -12,5 +12,7 @@
     }
   },
   "externals": {},
-  "localizedResources": {}
+  "localizedResources": {
+    "SmartGanttWebPartStrings": "lib/webparts/smartGantt/loc/{locale}.js"
+  }
 }

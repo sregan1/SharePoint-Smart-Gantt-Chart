@@ -1,4 +1,5 @@
 import * as React from 'react';
+import * as strings from 'SmartGanttWebPartStrings';
 
 export interface IColorSwatchPickerProps {
   colors: string[];
@@ -30,11 +31,11 @@ export const ColorSwatchPicker: React.FC<IColorSwatchPickerProps> = ({
         <div
           role="radio"
           aria-checked={!value}
-          aria-label="Auto color"
+          aria-label={strings.ColorSwatch_AutoColorAriaLabel}
           tabIndex={0}
           onClick={() => onChange('')}
           onKeyDown={e => commit(e, () => onChange(''))}
-          title="Auto color"
+          title={strings.ColorSwatch_AutoColorAriaLabel}
           style={{
             width: size, height: size, borderRadius: '50%',
             background: 'linear-gradient(135deg, #ccc 50%, #fff 50%)',
@@ -64,7 +65,7 @@ export const ColorSwatchPicker: React.FC<IColorSwatchPickerProps> = ({
         />
       ))}
       <label
-        title="Pick a custom color"
+        title={strings.ColorSwatch_PickCustomColorTitle}
         style={{ position: 'relative', width: size, height: size, cursor: 'pointer', flexShrink: 0 }}
       >
         <div
@@ -81,7 +82,7 @@ export const ColorSwatchPicker: React.FC<IColorSwatchPickerProps> = ({
           type="color"
           value={isCustom ? value : '#0078D4'}
           onChange={e => onChange(e.target.value)}
-          aria-label="Custom color"
+          aria-label={strings.ColorSwatch_CustomColorAriaLabel}
           style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
         />
       </label>

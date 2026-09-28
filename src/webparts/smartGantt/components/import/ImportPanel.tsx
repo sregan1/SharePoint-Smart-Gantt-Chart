@@ -14,6 +14,8 @@ import { IProject, ITask, PROJECT_COLORS, PROJECT_STATUS_OPTIONS, ProjectStatus 
 import { SharePointService } from '../../services/SharePointService';
 import { ColumnMapper } from './ColumnMapper';
 import styles from './ImportPanel.module.scss';
+import * as strings from 'SmartGanttWebPartStrings';
+import { formatString } from '../localeUtils';
 
 type ImportStep = 'source' | 'project-details' | 'map' | 'importing' | 'done';
 type SourceType = 'excel' | 'planner' | null;
@@ -102,7 +104,7 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
       fetchPlannerPlans(context)
         .then(p => { setPlans(p); setPlansLoading(false); })
         .catch((e: Error) => {
-          setPlansError(e.message || 'Could not load Planner plans. Check that Graph permissions have been approved.');
+          setPlansError(e.message || strings.ImportPanel_PlannerLoadError);
           setPlansLoading(false);
         });
     }
@@ -126,7 +128,7 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
         setNewProjectTitle(baseName);
       }
     } catch (e: any) {
-      setFileError(e.message || 'Could not parse the file.');
+      setFileError(e.message || strings.ImportPanel_CouldNotParseFile);
     }
   };
 
@@ -157,7 +159,7 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
       if (createMode) setNewProjectTitle(plan.title);
     } catch (e: any) {
       if (latestPlanIdRef.current !== plan.id) return;
-      setPlansError(e.message || 'Could not load tasks from this plan.');
+      setPlansError(e.message || strings.ImportPanel_CouldNotLoadPlannerTasks);
     } finally {
       if (latestPlanIdRef.current === plan.id) setPlanTasksLoading(false);
     }
@@ -190,7 +192,7 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
 
   const handleProjectDetailsNext = (): void => {
     const errs: Record<string, string> = {};
-    if (!newProjectTitle.trim()) errs.title = 'Project name is required.';
+    if (!newProjectTitle.trim()) errs.title = strings.ProjectPanel_ProjectNameRequired;
     setProjectErrors(errs);
     if (Object.keys(errs).length > 0) return;
 
@@ -236,7 +238,7 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
         setImportResult({
           succeeded: 0,
           failed: tasks.length,
-          errors: [`Could not create project: ${(e as Error).message || 'unknown error'}`],
+          errors: [formatString(strings.ImportPanel_CouldNotCreateProjectDetail, { detail: (e as Error).message || strings.ImportPanel_UnknownError })],
           createdIds: [],
         });
         setStep('done');
@@ -276,7 +278,7 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
         );
         if (depResult.warnings.length > 0) result.errors.push(...depResult.warnings);
       } catch (e) {
-        result.errors.push(`Could not link dependencies: ${e instanceof Error ? e.message : 'unknown error'}`);
+        result.errors.push(formatString(strings.ImportPanel_CouldNotLinkDependencies, { detail: e instanceof Error ? e.message : strings.ImportPanel_UnknownError }));
       }
     }
 
@@ -302,9 +304,9 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
           onClick={() => selectSource('excel')}
         >
           <div className={styles.sourceIcon}>📊</div>
-          <div className={styles.sourceTitle}>Excel / CSV</div>
+          <div className={styles.sourceTitle}>{strings.ImportPanel_SourceExcelTitle}</div>
           <div className={styles.sourceSubtitle}>
-            Upload .xlsx, .xls, or .csv — including exports from MS Project Desktop
+            {strings.ImportPanel_SourceExcelSubtitle}
           </div>
         </div>
         <div
@@ -312,9 +314,9 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
           onClick={() => selectSource('planner')}
         >
           <div className={styles.sourceIcon}>📋</div>
-          <div className={styles.sourceTitle}>Microsoft Planner</div>
+          <div className={styles.sourceTitle}>{strings.ImportPanel_SourcePlannerTitle}</div>
           <div className={styles.sourceSubtitle}>
-            Import tasks directly from any Planner plan in your Microsoft 365 account
+            {strings.ImportPanel_SourcePlannerSubtitle}
           </div>
         </div>
       </div>
@@ -338,15 +340,15 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
                   <strong>{importSource.fileName}</strong>
                 </div>
                 <div className={styles.dropSubtext}>
-                  {importSource.rows.length} rows · {importSource.headers.length} columns — click to change
+                  {formatString(strings.ImportPanel_RowsColsSummary, { rows: importSource.rows.length, cols: importSource.headers.length })}
                 </div>
               </>
             ) : (
               <>
                 <div className={styles.dropText}>
-                  <strong>Click to browse</strong> or drag &amp; drop your file here
+                  <strong>{strings.ImportPanel_ClickToBrowse}</strong>{strings.ImportPanel_DragDropSuffix}
                 </div>
-                <div className={styles.dropSubtext}>.xlsx · .xls · .csv · .ods</div>
+                <div className={styles.dropSubtext}>{strings.ImportPanel_SupportedExtensions}</div>
               </>
             )}
           </div>
@@ -369,20 +371,21 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
           {plansLoading && (
             <div className={styles.loadingRow}>
               <Spinner size={SpinnerSize.small} />
-              Loading your Planner plans…
+              {strings.ImportPanel_LoadingPlannerPlans}
             </div>
           )}
           {plansError && (
             <div style={{ color: '#D13438', fontSize: 13, padding: '12px 0' }}>
               ⚠ {plansError}
               <div style={{ fontSize: 12, color: '#605E5C', marginTop: 6 }}>
-                A Microsoft 365 admin may need to approve <em>Tasks.Read</em> and <em>Group.Read.All</em> permissions for this web part in the SharePoint Admin Center under API Access.
+                {strings.ImportPanel_PlannerPermissionsHintPrefix}<em>{strings.ImportPanel_PlannerPermissionsHintEmphasis}</em>{strings.ImportPanel_PlannerPermissionsHintSuffix}
               </div>
             </div>
           )}
           {!plansLoading && !plansError && plans.length === 0 && (
             <div className={styles.emptyPlanner}>
-              No Planner plans found. Make sure you belong to at least one Microsoft 365 group that has Planner.
+              <div>{strings.ImportPanel_NoPlannerPlansFoundTitle}</div>
+              <div>{strings.ImportPanel_NoPlannerPlansFoundBody}</div>
             </div>
           )}
           {!plansLoading && plans.length > 0 && (
@@ -416,25 +419,37 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
         <div className={styles.previewSummary} style={{ marginTop: 12 }}>
           <span className={styles.previewCount}>{taskCount}</span>
           <span className={styles.previewCountLabel}>
-            task{taskCount !== 1 ? 's' : ''} found in{' '}
-            {sourceType === 'excel' ? importSource.fileName : `"${importSource.planName}"`}
+            {formatString(strings.ImportPanel_TaskCountFoundIn, {
+              count: taskCount,
+              planName: sourceType === 'excel' ? importSource.fileName : importSource.planName,
+            })}
           </span>
         </div>
       )}
     </div>
   );
 
-  const statusOptions: IDropdownOption[] = PROJECT_STATUS_OPTIONS.map(s => ({ key: s, text: s }));
+  const statusLabels: Record<ProjectStatus, string> = {
+    'Planning': strings.ProjectStatus_Planning,
+    'Active': strings.ProjectStatus_Active,
+    'On Hold': strings.ProjectStatus_OnHold,
+    'Completed': strings.ProjectStatus_Completed,
+    'Cancelled': strings.ProjectStatus_Cancelled,
+  };
+  const statusOptions: IDropdownOption[] = PROJECT_STATUS_OPTIONS.map(s => ({ key: s, text: statusLabels[s] }));
 
   const renderProjectDetailsStep = (): React.ReactNode => (
     <div>
       <div style={{ fontSize: 13, color: '#605E5C', marginBottom: 16 }}>
+        {/* NOTE: no loc key matches this exact sentence — ImportPanel_ProjectDetailsIntroPrefix/Suffix
+            are worded for "Importing into <project name>", not a create-mode task-count summary.
+            Left hardcoded; see report. */}
         A new project will be created and all {taskCount} task{taskCount !== 1 ? 's' : ''} will be imported into it.
         You can change these details any time after import.
       </div>
 
       <TextField
-        label="Project name"
+        label={strings.ImportPanel_ProjectNameLabel}
         required
         value={newProjectTitle}
         onChange={(_, v) => setNewProjectTitle(v ?? '')}
@@ -443,7 +458,7 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
       />
 
       <TextField
-        label="Description"
+        label={strings.ImportPanel_DescriptionLabel}
         value={newProjectDescription}
         onChange={(_, v) => setNewProjectDescription(v ?? '')}
         multiline
@@ -452,14 +467,14 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
       />
 
       <Dropdown
-        label="Status"
+        label={strings.ImportPanel_StatusLabel}
         selectedKey={newProjectStatus}
         options={statusOptions}
         onChange={(_, o) => { if (o) setNewProjectStatus(o.key as ProjectStatus); }}
         styles={{ root: { marginBottom: 14 } }}
       />
 
-      <Label>Color</Label>
+      <Label>{strings.ImportPanel_ColorLabel}</Label>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
         {PROJECT_COLORS.map(c => (
           <div
@@ -485,8 +500,7 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
   const renderMapStep = (): React.ReactNode => (
     <div>
       <div style={{ fontSize: 13, color: '#605E5C', marginBottom: 14 }}>
-        Map the columns from your source to Smart Gantt fields. Columns that matched automatically
-        are highlighted in green &mdash; adjust any that don&apos;t look right.
+        {strings.ImportPanel_MapIntro}
       </div>
       {importSource && (
         <ColumnMapper
@@ -504,12 +518,12 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
     return (
       <div className={styles.progressSection}>
         <div className={styles.progressTitle}>
-          {createMode && done === 0 ? 'Creating project…' : 'Importing tasks…'}
+          {createMode && done === 0 ? strings.ImportPanel_CreatingProjectStatus : strings.ImportPanel_ImportingTasksStatus}
         </div>
         <div className={styles.progressBar} style={{ width: '100%' }}>
           <div className={styles.progressFill} style={{ width: `${pct}%` }} />
         </div>
-        <div className={styles.progressLabel}>{done} of {total} ({pct}%)</div>
+        <div className={styles.progressLabel}>{formatString(strings.ImportPanel_ProgressLabel, { done, total })} ({pct}%)</div>
         <Spinner size={SpinnerSize.medium} />
       </div>
     );
@@ -529,15 +543,21 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
           <div className={styles.resultInfo}>
             <div className={styles.resultTitle}>
               {projectCreateFailed
-                ? 'Could not create project'
+                ? strings.ImportPanel_CouldNotCreateProject
                 : hasErrors
-                ? `Import completed with ${importResult.failed} error${importResult.failed !== 1 ? 's' : ''}`
-                : createMode ? 'Project created successfully!' : 'Import successful!'}
+                ? formatString(strings.ImportPanel_ImportCompletedWithErrors, { count: importResult.failed })
+                : createMode ? strings.ImportPanel_ProjectCreatedSuccess : strings.ImportPanel_ImportSuccessful}
             </div>
             {!projectCreateFailed && (
               <div className={styles.resultDetail}>
-                {importResult.succeeded} task{importResult.succeeded !== 1 ? 's' : ''} added to{' '}
-                <strong>{targetProject?.title}</strong>
+                {formatString(strings.ImportPanel_TasksAddedTo, { count: importResult.succeeded, projectName: '‹PN›' })
+                  .split('‹PN›')
+                  .map((part, i, arr) => (
+                    <React.Fragment key={i}>
+                      {part}
+                      {i < arr.length - 1 && <strong>{targetProject?.title}</strong>}
+                    </React.Fragment>
+                  ))}
                 {hasErrors && ` · ${importResult.failed} failed`}
               </div>
             )}
@@ -547,7 +567,7 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
         {hasErrors && importResult.errors.length > 0 && (
           <div>
             <div style={{ fontSize: 12, fontWeight: 600, color: '#D13438', marginBottom: 6 }}>
-              Failed rows:
+              {strings.ImportPanel_FailedRowsLabel}
             </div>
             <div className={styles.errorList}>
               {importResult.errors.map((e, i) => (
@@ -567,15 +587,15 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
 
     if (step === 'done') {
       if (createMode && !createdProject) {
-        return <DefaultButton text="Close" onClick={onDismiss} />;
+        return <DefaultButton text={strings.ImportPanel_CloseButton} onClick={onDismiss} />;
       }
       return (
         <Stack horizontal tokens={{ childrenGap: 10 }}>
           <PrimaryButton
-            text={createMode ? 'Open Project' : 'View Imported Tasks'}
+            text={createMode ? strings.ImportPanel_OpenProjectButton : strings.ImportPanel_ViewImportedTasksButton}
             onClick={() => { onImportComplete(createdProject ?? undefined); onDismiss(); }}
           />
-          <DefaultButton text="Close" onClick={onDismiss} />
+          <DefaultButton text={strings.ImportPanel_CloseButton} onClick={onDismiss} />
         </Stack>
       );
     }
@@ -584,11 +604,11 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
       return (
         <Stack horizontal tokens={{ childrenGap: 10 }}>
           <PrimaryButton
-            text={importSource?.needsMapping || sourceType === 'excel' ? 'Next: Map Columns →' : `Import ${taskCount} Task${taskCount !== 1 ? 's' : ''}`}
+            text={importSource?.needsMapping || sourceType === 'excel' ? strings.ImportPanel_NextMapColumnsButton : formatString(strings.ImportPanel_ImportNTasksButton, { count: taskCount })}
             onClick={handleProjectDetailsNext}
           />
-          <DefaultButton text="Back" onClick={() => setStep('source')} />
-          <DefaultButton text="Cancel" onClick={onDismiss} />
+          <DefaultButton text={strings.ImportPanel_BackButton} onClick={() => setStep('source')} />
+          <DefaultButton text={strings.ImportPanel_CancelButton} onClick={onDismiss} />
         </Stack>
       );
     }
@@ -597,12 +617,12 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
       return (
         <Stack horizontal tokens={{ childrenGap: 10 }}>
           <PrimaryButton
-            text={`Import ${taskCount} Task${taskCount !== 1 ? 's' : ''}`}
+            text={formatString(strings.ImportPanel_ImportNTasksButton, { count: taskCount })}
             disabled={!hasTitleMapped || taskCount === 0}
             onClick={handleMappingNext}
           />
-          <DefaultButton text="Back" onClick={() => setStep(createMode ? 'project-details' : 'source')} />
-          <DefaultButton text="Cancel" onClick={onDismiss} />
+          <DefaultButton text={strings.ImportPanel_BackButton} onClick={() => setStep(createMode ? 'project-details' : 'source')} />
+          <DefaultButton text={strings.ImportPanel_CancelButton} onClick={onDismiss} />
         </Stack>
       );
     }
@@ -612,11 +632,11 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
     return (
       <Stack horizontal tokens={{ childrenGap: 10 }}>
         <PrimaryButton
-          text={needsMap ? 'Next →' : `Import ${taskCount} Tasks`}
+          text={needsMap ? strings.ImportPanel_NextButton : formatString(strings.ImportPanel_ImportNTasksButton, { count: taskCount })}
           disabled={!canProceedFromSource() || taskCount === 0}
           onClick={handleNext}
         />
-        <DefaultButton text="Cancel" onClick={onDismiss} />
+        <DefaultButton text={strings.ImportPanel_CancelButton} onClick={onDismiss} />
       </Stack>
     );
   };
@@ -625,25 +645,25 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
 
   const steps: Array<{ id: ImportStep; label: string }> = createMode
     ? [
-        { id: 'source',          label: 'Source' },
-        { id: 'project-details', label: 'Project' },
-        { id: 'map',             label: 'Map' },
-        { id: 'importing',       label: 'Import' },
-        { id: 'done',            label: 'Done' },
+        { id: 'source',          label: strings.ImportPanel_StepSource },
+        { id: 'project-details', label: strings.ImportPanel_StepProject },
+        { id: 'map',             label: strings.ImportPanel_StepMap },
+        { id: 'importing',       label: strings.ImportPanel_StepImport },
+        { id: 'done',            label: strings.ImportPanel_StepDone },
       ]
     : [
-        { id: 'source',    label: 'Source' },
-        { id: 'map',       label: 'Map' },
-        { id: 'importing', label: 'Import' },
-        { id: 'done',      label: 'Done' },
+        { id: 'source',    label: strings.ImportPanel_StepSource },
+        { id: 'map',       label: strings.ImportPanel_StepMap },
+        { id: 'importing', label: strings.ImportPanel_StepImport },
+        { id: 'done',      label: strings.ImportPanel_StepDone },
       ];
 
   const stepOrder: ImportStep[] = steps.map(s => s.id);
   const currentIdx = stepOrder.indexOf(step);
 
   const headerText = createMode
-    ? 'Import File as New Project'
-    : `Import Tasks into "${project!.title}"`;
+    ? strings.ImportPanel_ImportAsNewProjectHeader
+    : formatString(strings.ImportPanel_ImportIntoProjectHeader, { projectName: project!.title });
 
   return (
     <Panel

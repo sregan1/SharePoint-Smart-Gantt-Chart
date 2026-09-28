@@ -13,6 +13,8 @@ import {
 } from '../../utils/healthUtils';
 import { parseDateOnly, formatDateOnly, dateToDateOnlyString, todayLocalMidnight } from '../../utils/dateUtils';
 import { HealthBadge } from '../common/HealthBadge';
+import * as strings from 'SmartGanttWebPartStrings';
+import { formatString } from '../localeUtils';
 import styles from './GanttChart.module.scss';
 
 interface IGanttChartProps {
@@ -495,7 +497,10 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
     if (task.isMilestone) {
       const mx = dateToX(sDate) + dayWidth / 2;
       const my = rowIndex * ROW_H + ROW_H / 2;
-      const milestoneAriaLabel = `${task.title}, milestone, ${formatDateOnly(dateToDateOnlyString(sDate), 'MMM d, yyyy')}`;
+      const milestoneAriaLabel = formatString(strings.Gantt_MilestoneAriaLabel, {
+        taskTitle: task.title,
+        date: formatDateOnly(dateToDateOnlyString(sDate), 'MMM d, yyyy'),
+      });
       return (
         <g
           key={`bar-${task.id}`}
@@ -519,8 +524,12 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
     // "Flat" bar style fills with the plain color; "Gradient" (default)
     // references the shared per-color gradient hoisted into the SVG's <defs>.
     const progressFill = settings.barStyle === 'flat' ? color : `url(#${uid}-grad-${colorId(color)})`;
-    const barAriaLabel = `${task.title}, ${formatDateOnly(task.startDate, 'MMM d, yyyy')} to `
-      + `${formatDateOnly(task.dueDate, 'MMM d, yyyy')}, ${task.percentComplete}% complete`;
+    const barAriaLabel = formatString(strings.Gantt_BarAriaLabel, {
+      taskTitle: task.title,
+      startDate: formatDateOnly(task.startDate, 'MMM d, yyyy'),
+      dueDate: formatDateOnly(task.dueDate, 'MMM d, yyyy'),
+      percent: task.percentComplete,
+    });
     return (
       <g key={`bar-${task.id}`} className={styles.taskBarGroup} role="img" aria-label={barAriaLabel}>
         {/* Background bar */}
@@ -703,7 +712,10 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
           >
             <button
               className={styles.taskExpandBtn}
-              aria-label={`${isCollapsed ? 'Expand' : 'Collapse'} phase ${row.phase}`}
+              aria-label={formatString(strings.Gantt_ExpandPhaseAriaLabel, {
+                action: isCollapsed ? strings.Gantt_ExpandAction : strings.Gantt_CollapseAction,
+                phase: row.phase!,
+              })}
               aria-expanded={!isCollapsed}
               onClick={() => {
                 setCollapsedPhases(prev => {
@@ -739,7 +751,7 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
           <span className={styles.taskName} title={task.title}>{task.title}</span>
           {hasViolation && (
             <span
-              title="Started before all dependencies were completed"
+              title={strings.Gantt_DependencyViolationTooltip}
               style={{ color: '#CA5010', fontSize: 12, flexShrink: 0 }}
             >
               ⚠
@@ -750,16 +762,16 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
             <button
               className={styles.taskActionBtn}
               onClick={e => { e.stopPropagation(); onEditTask(task); }}
-              title="Edit"
-              aria-label={`Edit task ${task.title}`}
+              title={strings.Gantt_EditTitle}
+              aria-label={formatString(strings.Gantt_EditTaskAriaLabel, { taskTitle: task.title })}
             >
               ✏
             </button>
             <button
               className={`${styles.taskActionBtn} ${styles.deleteBtn}`}
               onClick={e => { e.stopPropagation(); onDeleteTask(task.id); }}
-              title="Delete"
-              aria-label={`Delete task ${task.title}`}
+              title={strings.Gantt_DeleteTitle}
+              aria-label={formatString(strings.Gantt_DeleteTaskAriaLabel, { taskTitle: task.title })}
             >
               ✕
             </button>
@@ -776,9 +788,9 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
       <div className={styles.ganttWrapper}>
         <div className={styles.emptyGantt}>
           <div style={{ fontSize: 48, opacity: 0.3 }}>📅</div>
-          <div style={{ fontSize: 18, fontWeight: 600, color: '#323130' }}>No tasks yet</div>
+          <div style={{ fontSize: 18, fontWeight: 600, color: '#323130' }}>{strings.Gantt_EmptyTitle}</div>
           <div style={{ fontSize: 14, color: '#605E5C' }}>
-            Add tasks to see them on the Gantt chart.
+            {strings.Gantt_EmptySubtitle}
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
             <button
@@ -788,7 +800,7 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
               }}
               onClick={onAddTask}
             >
-              + Add First Task
+              {strings.Gantt_AddFirstTask}
             </button>
             {onImport && (
               <button
@@ -798,7 +810,7 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
                 }}
                 onClick={onImport}
               >
-                📥 Import Tasks
+                {strings.Gantt_ImportTasksButton}
               </button>
             )}
           </div>
@@ -822,8 +834,8 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
         {/* Left panel */}
         <div className={styles.leftPanel}>
           <div className={styles.leftHeader} style={{ background: theme.bg }}>
-            <div className={`${styles.leftHeaderCell} ${styles.taskNameCol}`}>Task</div>
-            <div className={`${styles.leftHeaderCell} ${styles.durationCol}`}>Dur.</div>
+            <div className={`${styles.leftHeaderCell} ${styles.taskNameCol}`}>{strings.Gantt_TaskColumnHeader}</div>
+            <div className={`${styles.leftHeaderCell} ${styles.durationCol}`}>{strings.Gantt_DurationColumnHeader}</div>
           </div>
           <div
             className={styles.leftBody}
@@ -833,7 +845,7 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
           >
             {renderLeftRows()}
             <button className={styles.addTaskRowBtn} onClick={onAddTask}>
-              + Add Task
+              {strings.Gantt_AddTaskButton}
             </button>
           </div>
         </div>
@@ -1065,7 +1077,7 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
           )}
           <div className={styles.tooltipRow}>
             <span>⬛</span>
-            <span>{tooltip.task.percentComplete}% complete</span>
+            <span>{formatString(strings.Gantt_PercentCompleteTooltip, { value: tooltip.task.percentComplete })}</span>
           </div>
           {settings.showHealthBadges && (
             <div className={styles.tooltipRow}>

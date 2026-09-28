@@ -3,6 +3,8 @@ import { WebPartContext } from '@microsoft/sp-webpart-base';
 import { ITask, TaskStatus, TaskPriority, TASK_STATUS_OPTIONS, TASK_PRIORITY_OPTIONS } from '../models';
 import { SharePointService } from './SharePointService';
 import { toDateOnly } from '../utils/dateUtils';
+import * as strings from 'SmartGanttWebPartStrings';
+import { formatString } from '../components/localeUtils';
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -20,20 +22,20 @@ export interface IImportableFieldDef {
 }
 
 export const IMPORTABLE_FIELDS: IImportableFieldDef[] = [
-  { key: 'title', label: 'Task Name', required: true },
-  { key: 'startDate', label: 'Start Date' },
-  { key: 'dueDate', label: 'Due Date' },
-  { key: 'status', label: 'Status' },
-  { key: 'priority', label: 'Priority' },
-  { key: 'assignedTo', label: 'Assigned To' },
-  { key: 'assignedToEmail', label: 'Assigned To (Email)' },
-  { key: 'percentComplete', label: '% Complete' },
-  { key: 'phase', label: 'Phase' },
-  { key: 'description', label: 'Description' },
-  { key: 'notes', label: 'Notes' },
-  { key: 'isMilestone', label: 'Is Milestone' },
-  { key: 'dependencies', label: 'Dependencies' },
-  { key: 'skip', label: 'Skip this column' },
+  { key: 'title', label: strings.ImportField_TaskName, required: true },
+  { key: 'startDate', label: strings.ImportField_StartDate },
+  { key: 'dueDate', label: strings.ImportField_DueDate },
+  { key: 'status', label: strings.ImportField_Status },
+  { key: 'priority', label: strings.ImportField_Priority },
+  { key: 'assignedTo', label: strings.ImportField_AssignedTo },
+  { key: 'assignedToEmail', label: strings.ImportField_AssignedToEmail },
+  { key: 'percentComplete', label: strings.ImportField_PercentComplete },
+  { key: 'phase', label: strings.ImportField_Phase },
+  { key: 'description', label: strings.ImportField_Description },
+  { key: 'notes', label: strings.ImportField_Notes },
+  { key: 'isMilestone', label: strings.ImportField_IsMilestone },
+  { key: 'dependencies', label: strings.ImportField_Dependencies },
+  { key: 'skip', label: strings.ImportField_SkipColumn },
 ];
 
 export type ColumnMapping = Record<string, ImportableField>;
@@ -217,7 +219,7 @@ export async function parseExcelFile(file: File): Promise<IImportSource> {
         });
 
         if (rawRows.length === 0) {
-          reject(new Error('The file appears to be empty or has no data rows.'));
+          reject(new Error(strings.ImportService_EmptyFileError));
           return;
         }
 
@@ -244,11 +246,11 @@ export async function parseExcelFile(file: File): Promise<IImportSource> {
           needsMapping: mappingNeedsReview(autoMapping),
         });
       } catch (e) {
-        const detail = e instanceof Error ? `: ${e.message}` : '';
-        reject(new Error(`Could not read the file. Make sure it is a valid .xlsx, .xls, or .csv file${detail}.`));
+        const detail = e instanceof Error ? e.message : '';
+        reject(new Error(formatString(strings.ImportService_ReadErrorDetail, { detail })));
       }
     };
-    reader.onerror = () => reject(new Error('File read error.'));
+    reader.onerror = () => reject(new Error(strings.ImportService_FileReadError));
     reader.readAsArrayBuffer(file);
   });
 }
@@ -505,7 +507,7 @@ export async function batchImport(
         succeeded++;
       } else {
         failed++;
-        errors.push(`Row ${idx + 1} ("${chunk[i].title}"): ${r.error || 'Unknown error'}`);
+        errors.push(formatString(strings.ImportService_RowError, { rowNum: idx + 1, title: chunk[i].title, error: r.error || 'Unknown error' }));
       }
     });
     if (onProgress) onProgress(Math.min(start + CHUNK_SIZE, total), total);
@@ -588,7 +590,7 @@ export async function resolveDependencies(
       // Otherwise match by task title (case-insensitive)
       const key = name.toLowerCase();
       if (ambiguousTitles.has(key)) {
-        warnings.push(`Dependency "${name}" matches more than one task title — skipped.`);
+        warnings.push(formatString(strings.ImportService_AmbiguousDependency, { name }));
         return;
       }
       const id = titleToId.get(key);
@@ -619,7 +621,7 @@ export async function resolveDependencies(
       if (r.error === null) {
         resolved++;
       } else {
-        warnings.push(`Could not link dependencies for task ${chunk[i].taskId}: ${r.error}`);
+        warnings.push(formatString(strings.ImportService_LinkDependencyError, { taskId: chunk[i].taskId, error: r.error }));
       }
     });
   }

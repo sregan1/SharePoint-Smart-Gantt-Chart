@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.0] - 2026-09-28
+
+### Added
+
+- **Localization** — the web part's UI text is now localized into 30 languages (English plus Arabic, Czech, Danish, German, Greek, Spanish, Finnish, French, Hebrew, Hindi, Hungarian, Indonesian, Italian, Japanese, Korean, Norwegian Bokmål, Dutch, Polish, Portuguese (Brazil and Portugal), Romanian, Russian, Swedish, Thai, Turkish, Ukrainian, Vietnamese, and Chinese (Simplified and Traditional)), matching the current SharePoint UI language automatically
+
+### Fixed
+
+- **Project selector in Portfolio view** — selecting a different project from the toolbar's project dropdown while viewing Portfolio now switches to that project's Gantt view instead of appearing to do nothing (the view mode wasn't leaving Portfolio when a project was picked)
+
+---
+
 ## [1.3.0] - 2026-07-14
 
 ### Added

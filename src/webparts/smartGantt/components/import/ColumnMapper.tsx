@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { IImportSource, IMPORTABLE_FIELDS, ColumnMapping, ImportableField } from '../../services/ImportService';
 import styles from './ColumnMapper.module.scss';
+import * as strings from 'SmartGanttWebPartStrings';
+import { formatString } from '../localeUtils';
 
 interface IColumnMapperProps {
   source: IImportSource;
@@ -46,23 +48,23 @@ export const ColumnMapper: React.FC<IColumnMapperProps> = ({ source, mapping, on
       {!hasTitleMapped && (
         <div className={styles.warningBanner}>
           <span className={styles.warningIcon}>⚠</span>
-          <span><strong>Task Name</strong> is required — map it to a source column before importing.</span>
+          <span>{strings.ColumnMapper_TaskNameRequiredBanner}</span>
         </div>
       )}
 
       {hasTitleMapped && skippedCount > 0 && (
         <div className={styles.infoBanner}>
           <span className={styles.infoIcon}>ℹ</span>
-          <span><strong>{skippedCount}</strong> column{skippedCount !== 1 ? 's' : ''} will be skipped. Review the mappings below and adjust if needed.</span>
+          <span>{formatString(strings.ColumnMapper_SkippedColumnsBanner, { count: skippedCount })}</span>
         </div>
       )}
 
       {/* Header row */}
       <div className={styles.mapperHeader}>
-        <span className={styles.mapperHeaderLabel}>Source Column</span>
+        <span className={styles.mapperHeaderLabel}>{strings.ColumnMapper_SourceColumnHeader}</span>
         <span />
-        <span className={styles.mapperHeaderLabel}>Smart Gantt Field</span>
-        <span className={styles.mapperHeaderLabel}>Status</span>
+        <span className={styles.mapperHeaderLabel}>{strings.ColumnMapper_TargetFieldHeader}</span>
+        <span className={styles.mapperHeaderLabel}>{strings.ColumnMapper_StatusHeader}</span>
       </div>
 
       {/* Mapping rows */}
@@ -91,10 +93,10 @@ export const ColumnMapper: React.FC<IColumnMapperProps> = ({ source, mapping, on
             </select>
             <span>
               {isSkipped ? (
-                <span className={styles.skippedBadge}>Skipped</span>
+                <span className={styles.skippedBadge}>{strings.ColumnMapper_SkippedBadge}</span>
               ) : (
                 <span className={styles.mappedBadge}>
-                  {wasAutoMapped ? '✓ Auto' : '✓ Set'}
+                  {wasAutoMapped ? `✓ ${strings.ColumnMapper_AutoMappedBadge}` : `✓ ${strings.ColumnMapper_SetBadge}`}
                 </span>
               )}
             </span>
@@ -105,6 +107,8 @@ export const ColumnMapper: React.FC<IColumnMapperProps> = ({ source, mapping, on
       {/* Preview */}
       {previewCols.length > 0 && previewRows.length > 0 && (
         <div className={styles.previewSection}>
+          {/* NOTE: no loc key matches "Preview (first N rows)" — ColumnMapper_PreviewTitle is
+              worded for a single column name ("Preview: {columnName}"). Left hardcoded; see report. */}
           <div className={styles.previewTitle}>Preview (first {Math.min(PREVIEW_ROWS, previewRows.length)} rows)</div>
           <div style={{ overflowX: 'auto' }}>
             <table className={styles.previewTable}>
@@ -119,7 +123,7 @@ export const ColumnMapper: React.FC<IColumnMapperProps> = ({ source, mapping, on
                 {previewRows.map((row, i) => (
                   <tr key={i}>
                     {previewCols.map(col => (
-                      <td key={col} title={row[col]}>{row[col] || '—'}</td>
+                      <td key={col} title={row[col]}>{row[col] || strings.ColumnMapper_EmptyCellDash}</td>
                     ))}
                   </tr>
                 ))}

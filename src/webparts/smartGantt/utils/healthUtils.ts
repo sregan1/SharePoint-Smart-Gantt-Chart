@@ -1,4 +1,5 @@
 import { differenceInDays } from 'date-fns';
+import * as strings from 'SmartGanttWebPartStrings';
 import { ITask, IProject, TaskHealth, ProjectHealth } from '../models';
 import { parseDateOnly } from './dateUtils';
 
@@ -69,10 +70,10 @@ export function healthLightColor(h: TaskHealth | ProjectHealth): string {
 
 export function healthLabel(h: TaskHealth | ProjectHealth): string {
   switch (h) {
-    case 'complete':  return 'Done';
-    case 'on-track':  return 'On Track';
-    case 'at-risk':   return 'At Risk';
-    case 'overdue':   return 'Overdue';
+    case 'complete':  return strings.Health_Done;
+    case 'on-track':  return strings.Health_OnTrack;
+    case 'at-risk':   return strings.Health_AtRisk;
+    case 'overdue':   return strings.Health_Overdue;
   }
 }
 

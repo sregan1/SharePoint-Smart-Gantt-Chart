@@ -4,12 +4,14 @@ import {
   addDays, differenceInCalendarDays, endOfMonth, format,
   isWeekend, startOfMonth, startOfWeek, addWeeks, addMonths, max, min, getISOWeek,
 } from 'date-fns';
+import * as strings from 'SmartGanttWebPartStrings';
 import {
   IProject, ITask, IProjectTaskStats, IGanttDisplaySettings, STATUS_COLORS, PRIORITY_COLORS,
   HEADER_THEME_COLORS, phaseColor,
 } from '../models';
-import { computeTaskHealth, healthColor } from '../utils/healthUtils';
+import { computeTaskHealth, healthColor, healthLabel } from '../utils/healthUtils';
 import { parseDateOnly, formatDateOnly, todayLocalMidnight } from '../utils/dateUtils';
+import { formatString } from '../components/localeUtils';
 
 // Strip characters that are invalid in file names (project titles can contain
 // anything).
@@ -20,26 +22,27 @@ function safeFileName(name: string): string {
 // ─── Excel export ─────────────────────────────────────────────────────────────
 
 const TASK_EXPORT_HEADERS = [
-  'Task Name', 'Phase', 'Start Date', 'Due Date', 'Status', 'Priority',
-  'Assigned To', 'Assigned To (Email)', '% Complete', 'Is Milestone', 'Description', 'Notes',
+  strings.Export_ColTaskName, strings.Export_ColPhase, strings.Export_ColStartDate, strings.Export_ColDueDate,
+  strings.Export_ColStatus, strings.Export_ColPriority, strings.Export_ColAssignedTo, strings.Export_ColAssignedToEmail,
+  strings.Export_ColPercentComplete, strings.Export_ColIsMilestone, strings.Export_ColDescription, strings.Export_ColNotes,
 ];
 
 export function exportTasksToExcel(project: IProject, tasks: ITask[]): void {
   const fmt = (d: string): string => formatDateOnly(d, 'MM/dd/yyyy', '');
 
   const rows = tasks.map(t => ({
-    'Task Name': t.title,
-    'Phase': t.phase,
-    'Start Date': fmt(t.startDate),
-    'Due Date': fmt(t.dueDate),
-    'Status': t.status,
-    'Priority': t.priority,
-    'Assigned To': t.assignedTo,
-    'Assigned To (Email)': t.assignedToEmail,
-    '% Complete': t.percentComplete,
-    'Is Milestone': t.isMilestone ? 'Yes' : 'No',
-    'Description': t.description,
-    'Notes': t.notes,
+    [strings.Export_ColTaskName]: t.title,
+    [strings.Export_ColPhase]: t.phase,
+    [strings.Export_ColStartDate]: fmt(t.startDate),
+    [strings.Export_ColDueDate]: fmt(t.dueDate),
+    [strings.Export_ColStatus]: t.status,
+    [strings.Export_ColPriority]: t.priority,
+    [strings.Export_ColAssignedTo]: t.assignedTo,
+    [strings.Export_ColAssignedToEmail]: t.assignedToEmail,
+    [strings.Export_ColPercentComplete]: t.percentComplete,
+    [strings.Export_ColIsMilestone]: t.isMilestone ? strings.Export_Yes : strings.Export_No,
+    [strings.Export_ColDescription]: t.description,
+    [strings.Export_ColNotes]: t.notes,
   }));
 
   // json_to_sheet([]) produces a sheet with no header row at all — an
@@ -55,8 +58,8 @@ export function exportTasksToExcel(project: IProject, tasks: ITask[]): void {
   }));
 
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Tasks');
-  XLSX.writeFile(wb, `${safeFileName(project.title)} - Tasks.xlsx`);
+  XLSX.utils.book_append_sheet(wb, ws, strings.Export_SheetNameTasks);
+  XLSX.writeFile(wb, `${safeFileName(project.title)}${strings.Export_ExcelFileSuffix}`);
 }
 
 // ─── Gantt image export ───────────────────────────────────────────────────────
@@ -330,11 +333,11 @@ export function renderGanttSVG(
   <rect width="${totalW}" height="${TITLE_H}" fill="${project.color}"/>
   <circle cx="24" cy="${TITLE_H / 2}" r="7" fill="white" opacity="0.25"/>
   <text x="38" y="${TITLE_H / 2 + 6}" font-size="17" font-weight="700" fill="white">${escXml(project.title)}</text>
-  <text x="${totalW - 12}" y="${TITLE_H / 2 + 5}" font-size="11" fill="rgba(255,255,255,0.7)" text-anchor="end">Exported ${format(today, 'MMM d, yyyy')}</text>
+  <text x="${totalW - 12}" y="${TITLE_H / 2 + 5}" font-size="11" fill="rgba(255,255,255,0.7)" text-anchor="end">${escXml(formatString(strings.Export_ExportedDateLabel, { date: format(today, 'MMM d, yyyy') }))}</text>
 
   <!-- ── Left panel header ─────────────────────────────────────────── -->
   <rect y="${TITLE_H}" width="${LEFT_W}" height="${HEADER_H}" fill="${theme.bg}"/>
-  <text x="16" y="${TITLE_H + HEADER_H / 2 + 4}" font-size="11" font-weight="600" fill="${theme.subtext}" letter-spacing="0.5">TASK NAME</text>
+  <text x="16" y="${TITLE_H + HEADER_H / 2 + 4}" font-size="11" font-weight="600" fill="${theme.subtext}" letter-spacing="0.5">${escXml(strings.Export_TaskNameColumnLabel)}</text>
 
   <!-- ── Timeline header ───────────────────────────────────────────── -->
   <rect x="${LEFT_W}" y="${TITLE_H}" width="${timelineW}" height="${HEADER_H}" fill="${theme.bg}"/>
@@ -371,7 +374,7 @@ export function downloadPNG(svgString: string, filename: string, scale: number =
   return svgToCanvas(svgString, scale).then(canvas => new Promise<void>((resolve, reject) => {
     canvas.toBlob(pngBlob => {
       if (!pngBlob) {
-        reject(new Error('Could not generate the image — the chart may be too large to export as an image.'));
+        reject(new Error(strings.Export_ImageGenerationFailed));
         return;
       }
       const pngUrl = URL.createObjectURL(pngBlob);
@@ -408,7 +411,7 @@ function svgToCanvas(svgString: string, scale: number): Promise<HTMLCanvasElemen
       const ctx = canvas.getContext('2d');
       if (!ctx) {
         URL.revokeObjectURL(svgUrl);
-        reject(new Error('Could not create a drawing context for the export.'));
+        reject(new Error(strings.Export_DrawingContextFailed));
         return;
       }
       ctx.scale(effectiveScale, effectiveScale);
@@ -418,7 +421,7 @@ function svgToCanvas(svgString: string, scale: number): Promise<HTMLCanvasElemen
       URL.revokeObjectURL(svgUrl);
       resolve(canvas);
     };
-    img.onerror = (): void => reject(new Error('SVG render failed'));
+    img.onerror = (): void => reject(new Error(strings.Export_SvgRenderFailed));
     img.src = svgUrl;
   });
 }
@@ -466,7 +469,7 @@ export async function exportToPowerPoint(
     line: { color: 'FFFFFF', width: 0 },
   });
 
-  cover.addText('PROJECT REPORT', {
+  cover.addText(strings.Export_ProjectReportLabel, {
     x: 0.65, y: 0.9, w: 12, h: 0.45,
     fontSize: 11,
     color: 'FFFFFF',
@@ -481,7 +484,7 @@ export async function exportToPowerPoint(
     bold: true,
   });
 
-  cover.addText(`Status: ${project.status}`, {
+  cover.addText(formatString(strings.Export_StatusLine, { status: project.status }), {
     x: 0.65, y: 3.1, w: 6, h: 0.45,
     fontSize: 16,
     color: 'FFFFFF',
@@ -489,7 +492,7 @@ export async function exportToPowerPoint(
   });
 
   const dateRange = (project.startDate || project.dueDate)
-    ? `${fmt(project.startDate)}  →  ${fmt(project.dueDate)}`
+    ? `${fmt(project.startDate)}${strings.Export_DateRangeSeparator}${fmt(project.dueDate)}`
     : '';
   if (dateRange) {
     cover.addText(dateRange, {
@@ -509,14 +512,14 @@ export async function exportToPowerPoint(
   }
 
   if (project.projectManager) {
-    cover.addText(`Project Manager: ${project.projectManager}`, {
+    cover.addText(formatString(strings.Export_ProjectManagerLine, { name: project.projectManager }), {
       x: 0.65, y: 5.8, w: 8, h: 0.35,
       fontSize: 12,
       color: '605E5C',
     });
   }
 
-  cover.addText(`Generated ${format(today, 'MMMM d, yyyy')}`, {
+  cover.addText(formatString(strings.Export_GeneratedDateLine, { date: format(today, 'MMMM d, yyyy') }), {
     x: 0, y: 7.15, w: 13.15, h: 0.3,
     fontSize: 10,
     color: '605E5C',
@@ -533,7 +536,7 @@ export async function exportToPowerPoint(
     fill: { color: projectColor },
     line: { color: projectColor, width: 0 },
   });
-  summary.addText('Project Summary', {
+  summary.addText(strings.Export_ProjectSummaryTitle, {
     x: 0.4, y: 0, w: 9, h: 0.85,
     fontSize: 22, color: 'FFFFFF', bold: true, valign: 'middle',
   });
@@ -544,11 +547,11 @@ export async function exportToPowerPoint(
 
   // Stat boxes
   const statItems = [
-    { label: 'Total Tasks',  value: totalCount,                   bg: 'F3F2F1', fg: '323130' },
-    { label: 'Completed',    value: byStatus['Completed'],        bg: 'F1FAF1', fg: '107C10' },
-    { label: 'In Progress',  value: byStatus['In Progress'],      bg: 'EFF6FC', fg: '0078D4' },
-    { label: 'On Hold',      value: byStatus['On Hold'],          bg: 'FFF4EC', fg: 'CA5010' },
-    { label: 'Not Started',  value: byStatus['Not Started'],      bg: 'F3F2F1', fg: '605E5C' },
+    { label: strings.Export_StatTotalTasks,  value: totalCount,                   bg: 'F3F2F1', fg: '323130' },
+    { label: strings.Export_StatCompleted,   value: byStatus['Completed'],        bg: 'F1FAF1', fg: '107C10' },
+    { label: strings.Export_StatInProgress,  value: byStatus['In Progress'],      bg: 'EFF6FC', fg: '0078D4' },
+    { label: strings.Export_StatOnHold,      value: byStatus['On Hold'],          bg: 'FFF4EC', fg: 'CA5010' },
+    { label: strings.Export_StatNotStarted,  value: byStatus['Not Started'],      bg: 'F3F2F1', fg: '605E5C' },
   ];
 
   const BOX_W = 2.3; const BOX_H = 1.4; const BOX_Y = 1.1; const GAP = 0.165;
@@ -574,7 +577,8 @@ export async function exportToPowerPoint(
 
   // Overall progress bar
   const BAR_Y = 2.85;
-  summary.addText(`Overall Progress: ${overallPct}%`, {
+  const overallProgressPercentText = formatString(strings.Export_OverallProgressPercent, { percent: overallPct });
+  summary.addText(`${strings.Export_OverallProgressLine}: ${overallProgressPercentText}`, {
     x: 0.5, y: BAR_Y, w: 8, h: 0.35,
     fontSize: 13, bold: true, color: '323130',
   });
@@ -588,14 +592,14 @@ export async function exportToPowerPoint(
       fill: { color: projectColor }, line: { color: projectColor, width: 0 },
     });
   }
-  summary.addText(`${overallPct}%`, {
+  summary.addText(overallProgressPercentText, {
     x: 12.85, y: BAR_Y, w: 0.8, h: 0.35,
     fontSize: 13, bold: true, color: projectColor, align: 'right',
   });
 
   // Status breakdown (two columns)
   const TBL_Y = 3.75;
-  summary.addText('Status Breakdown', {
+  summary.addText(strings.Export_StatusBreakdownTitle, {
     x: 0.5, y: TBL_Y, w: 6, h: 0.35,
     fontSize: 12, bold: true, color: '323130',
   });
@@ -616,7 +620,7 @@ export async function exportToPowerPoint(
       x: cx, y: cy + 0.06, w: 0.2, h: 0.2,
       fill: { color: s.dotColor }, line: { color: s.dotColor, width: 0 },
     });
-    summary.addText(`${s.label}: ${cnt}  (${pct}%)`, {
+    summary.addText(formatString(strings.Export_StatusBreakdownRow, { status: s.label, count: cnt, percent: pct }), {
       x: cx + 0.28, y: cy, w: 5.6, h: 0.36,
       fontSize: 12, color: '323130',
     });
@@ -631,7 +635,7 @@ export async function exportToPowerPoint(
     fill: { color: projectColor },
     line: { color: projectColor, width: 0 },
   });
-  gantt.addText('Gantt Timeline', {
+  gantt.addText(strings.Export_GanttTimelineTitle, {
     x: 0.4, y: 0, w: 9, h: 0.85,
     fontSize: 22, color: 'FFFFFF', bold: true, valign: 'middle',
   });
@@ -657,7 +661,7 @@ export async function exportToPowerPoint(
     x: 0, y: 0, w: 13.33, h: 0.85,
     fill: { color: projectColor }, line: { color: projectColor, width: 0 },
   });
-  activity.addText('Summary & Recent Activity', {
+  activity.addText(strings.Export_SummaryRecentActivityTitle, {
     x: 0.4, y: 0, w: 9, h: 0.85,
     fontSize: 22, color: 'FFFFFF', bold: true, valign: 'middle',
   });
@@ -675,7 +679,7 @@ export async function exportToPowerPoint(
   // ── LEFT column: Project Overview ──────────────────────────────────────────
   const LX = 0.5; const LW = 5.85;
 
-  activity.addText('PROJECT OVERVIEW', {
+  activity.addText(strings.Export_ProjectOverviewLabel, {
     x: LX, y: 1.05, w: LW, h: 0.3,
     fontSize: 10, bold: true, color: '605E5C', charSpacing: 1.5,
   });
@@ -689,10 +693,10 @@ export async function exportToPowerPoint(
 
   const detailStartY = project.description ? 3.65 : 1.45;
   const details: { label: string; value: string }[] = [
-    { label: 'Status', value: project.status },
-    ...(project.startDate ? [{ label: 'Start Date', value: fmt(project.startDate) }] : []),
-    ...(project.dueDate   ? [{ label: 'Due Date',   value: fmt(project.dueDate)   }] : []),
-    ...(project.projectManager ? [{ label: 'Project Manager', value: project.projectManager }] : []),
+    { label: strings.Export_DetailStatusLabel, value: project.status },
+    ...(project.startDate ? [{ label: strings.Export_DetailStartDateLabel, value: fmt(project.startDate) }] : []),
+    ...(project.dueDate   ? [{ label: strings.Export_DetailDueDateLabel,   value: fmt(project.dueDate)   }] : []),
+    ...(project.projectManager ? [{ label: strings.Export_DetailProjectManagerLabel, value: project.projectManager }] : []),
   ];
 
   details.forEach((d, i) => {
@@ -710,7 +714,7 @@ export async function exportToPowerPoint(
   // ── RIGHT column: Past 7 Days ──────────────────────────────────────────────
   const RX = 6.75; const RW = 6.3;
 
-  activity.addText('PAST 7 DAYS', {
+  activity.addText(strings.Export_Past7DaysLabel, {
     x: RX, y: 1.05, w: RW, h: 0.3,
     fontSize: 10, bold: true, color: '605E5C', charSpacing: 1.5,
   });
@@ -728,7 +732,7 @@ export async function exportToPowerPoint(
   const MAX_PER_SECTION = 4;
 
   if (recentTasks.length === 0) {
-    activity.addText('No task activity recorded in the past 7 days.', {
+    activity.addText(strings.Export_NoActivityMessage, {
       x: RX, y: ry, w: RW, h: 0.4,
       fontSize: 12, color: '8A8886', italic: true,
     });
@@ -739,7 +743,7 @@ export async function exportToPowerPoint(
         x: RX, y: ry, w: RW, h: 0.33,
         fill: { color: 'F1FAF1' }, line: { color: 'C8E6C9', width: 1 }, rectRadius: 0.03,
       });
-      activity.addText(`Completed this week  (${completedThisWeek.length})`, {
+      activity.addText(formatString(strings.Export_CompletedThisWeekHeader, { count: completedThisWeek.length }), {
         x: RX + 0.15, y: ry, w: RW - 0.3, h: 0.33,
         fontSize: 11, bold: true, color: '107C10', valign: 'middle',
       });
@@ -749,7 +753,7 @@ export async function exportToPowerPoint(
         const created = parseTimestamp(t.created);
         const isNew = created !== null && created >= weekAgo;
         const titleRuns = isNew
-          ? [{ text: 'NEW  ', options: { color: '107C10', bold: true, fontSize: 9 } },
+          ? [{ text: strings.Export_NewBadge, options: { color: '107C10', bold: true, fontSize: 9 } },
              { text: t.title, options: { color: '323130', fontSize: 12 } }]
           : [{ text: t.title, options: { color: '323130', fontSize: 12 } }];
 
@@ -760,7 +764,7 @@ export async function exportToPowerPoint(
         activity.addText(titleRuns, {
           x: RX + 0.34, y: ry, w: RW - 0.34, h: 0.26, valign: 'middle',
         });
-        activity.addText(`Completed  •  ${t.percentComplete}%`, {
+        activity.addText(formatString(strings.Export_CompletedPercentLine, { percent: t.percentComplete }), {
           x: RX + 0.34, y: ry + 0.27, w: RW - 0.34, h: 0.18,
           fontSize: 9, color: '8A8886',
         });
@@ -768,7 +772,7 @@ export async function exportToPowerPoint(
       });
 
       if (completedThisWeek.length > MAX_PER_SECTION) {
-        activity.addText(`+ ${completedThisWeek.length - MAX_PER_SECTION} more`, {
+        activity.addText(formatString(strings.Export_MoreItemsSuffix, { count: completedThisWeek.length - MAX_PER_SECTION }), {
           x: RX + 0.34, y: ry, w: RW, h: 0.3,
           fontSize: 11, color: '8A8886', italic: true,
         });
@@ -782,7 +786,7 @@ export async function exportToPowerPoint(
         x: RX, y: ry, w: RW, h: 0.33,
         fill: { color: 'EFF6FC' }, line: { color: 'BFDBF7', width: 1 }, rectRadius: 0.03,
       });
-      activity.addText(`In progress / updated  (${updatedThisWeek.length})`, {
+      activity.addText(`${strings.Export_InProgressUpdatedHeader}  (${updatedThisWeek.length})`, {
         x: RX + 0.15, y: ry, w: RW - 0.3, h: 0.33,
         fontSize: 11, bold: true, color: '0078D4', valign: 'middle',
       });
@@ -804,7 +808,7 @@ export async function exportToPowerPoint(
         activity.addText(titleRuns, {
           x: RX + 0.34, y: ry, w: RW - 0.34, h: 0.26, valign: 'middle',
         });
-        activity.addText(`${t.status}  •  ${t.percentComplete}%`, {
+        activity.addText(formatString(strings.Export_StatusPercentLine, { status: t.status, percent: t.percentComplete }), {
           x: RX + 0.34, y: ry + 0.27, w: RW - 0.34, h: 0.18,
           fontSize: 9, color: '8A8886',
         });
@@ -812,7 +816,7 @@ export async function exportToPowerPoint(
       });
 
       if (updatedThisWeek.length > MAX_PER_SECTION) {
-        activity.addText(`+ ${updatedThisWeek.length - MAX_PER_SECTION} more`, {
+        activity.addText(formatString(strings.Export_MoreItemsSuffix, { count: updatedThisWeek.length - MAX_PER_SECTION }), {
           x: RX + 0.34, y: ry, w: RW, h: 0.3,
           fontSize: 11, color: '8A8886', italic: true,
         });
@@ -820,14 +824,13 @@ export async function exportToPowerPoint(
     }
   }
 
-  await pptx.writeFile({ fileName: `${safeFileName(project.title)} - Project Report.pptx` });
+  await pptx.writeFile({ fileName: formatString(strings.Export_ProjectReportFileName, { projectName: safeFileName(project.title) }) });
 }
 
 // ─── Portfolio exports ────────────────────────────────────────────────────────
 
 function portfolioHealthLabel(h: string): string {
-  const map: Record<string, string> = { complete: 'Done', 'on-track': 'On Track', 'at-risk': 'At Risk', overdue: 'Overdue' };
-  return map[h] ?? h;
+  return healthLabel(h as Parameters<typeof healthLabel>[0]);
 }
 
 function portfolioHealthHex(h: string): string {
@@ -845,18 +848,18 @@ export function exportPortfolioToExcel(
     const s = statsMap?.get(p.id);
     const ok = s && !s.statsError;
     return {
-      'Project':     p.title,
-      'Status':      p.status,
-      'Health':      s ? (s.statsError ? 'Unavailable' : portfolioHealthLabel(s.health)) : '—',
-      'Total Tasks': ok ? s!.totalTasks : '—',
-      'Completed':   ok ? s!.completedCount : '—',
-      'In Progress': ok ? s!.inProgressCount : '—',
-      'At Risk':     ok ? s!.atRiskCount : '—',
-      'Overdue':     ok ? s!.overdueCount : '—',
-      '% Done':      ok ? `${s!.overallPct}%` : '—',
-      'Start':       fmt(p.startDate || (ok ? s!.earliestStart : '') || ''),
-      'Due':         fmt(p.dueDate   || (ok ? s!.latestDue    : '') || ''),
-      'Description': p.description,
+      [strings.Export_TableProject]:     p.title,
+      [strings.Export_TableStatus]:      p.status,
+      [strings.Export_TableHealth]:      s ? (s.statsError ? strings.Export_UnavailableLabel : portfolioHealthLabel(s.health)) : '—',
+      [strings.Export_StatTotalTasks]:   ok ? s!.totalTasks : '—',
+      [strings.Export_StatCompleted]:    ok ? s!.completedCount : '—',
+      [strings.Export_StatInProgress]:   ok ? s!.inProgressCount : '—',
+      [strings.Export_TableAtRisk]:      ok ? s!.atRiskCount : '—',
+      [strings.Export_TableOverdue]:     ok ? s!.overdueCount : '—',
+      [strings.Export_TablePctDone]:     ok ? `${s!.overallPct}%` : '—',
+      [strings.Export_ColStart]:         fmt(p.startDate || (ok ? s!.earliestStart : '') || ''),
+      [strings.Export_ColDue]:           fmt(p.dueDate   || (ok ? s!.latestDue    : '') || ''),
+      [strings.Export_ColDescription]:   p.description,
     };
   });
 
@@ -867,8 +870,8 @@ export function exportPortfolioToExcel(
   }));
 
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Portfolio');
-  XLSX.writeFile(wb, 'Portfolio Summary.xlsx');
+  XLSX.utils.book_append_sheet(wb, ws, strings.Export_SheetNamePortfolio);
+  XLSX.writeFile(wb, strings.Export_PortfolioSummaryFileName);
 }
 
 export async function exportPortfolioToPowerPoint(
@@ -897,31 +900,31 @@ export async function exportPortfolioToPowerPoint(
     fill: { color: 'FFFFFF' }, line: { color: 'FFFFFF', width: 0 },
   });
 
-  cover.addText('PORTFOLIO REPORT', {
+  cover.addText(strings.Export_PortfolioReportLabel, {
     x: 0.65, y: 0.9, w: 12, h: 0.45,
     fontSize: 11, color: 'FFFFFF', charSpacing: 3, transparency: 30,
   });
-  cover.addText('Portfolio Overview', {
+  cover.addText(strings.Export_PortfolioOverviewTitle, {
     x: 0.65, y: 1.35, w: 12, h: 1.4,
     fontSize: 42, color: 'FFFFFF', bold: true,
   });
-  cover.addText(`${projects.length} projects`, {
+  cover.addText(formatString(strings.Export_ProjectsCountLine, { count: projects.length }), {
     x: 0.65, y: 3.0, w: 6, h: 0.45,
     fontSize: 16, color: 'FFFFFF', transparency: 15,
   });
 
   // Health summary chips
   const summaryParts: string[] = [];
-  if (healthCounts['on-track'])  summaryParts.push(`${healthCounts['on-track']} On Track`);
-  if (healthCounts['at-risk'])   summaryParts.push(`${healthCounts['at-risk']} At Risk`);
-  if (healthCounts.overdue)      summaryParts.push(`${healthCounts.overdue} Overdue`);
+  if (healthCounts['on-track'])  summaryParts.push(formatString(strings.Export_HealthSummaryOnTrack, { count: healthCounts['on-track'] }));
+  if (healthCounts['at-risk'])   summaryParts.push(formatString(strings.Export_HealthSummaryAtRisk, { count: healthCounts['at-risk'] }));
+  if (healthCounts.overdue)      summaryParts.push(formatString(strings.Export_HealthSummaryOverdue, { count: healthCounts.overdue }));
   if (summaryParts.length) {
     cover.addText(summaryParts.join('  ·  '), {
       x: 0.65, y: 3.5, w: 12, h: 0.4,
       fontSize: 14, color: 'FFFFFF', transparency: 30,
     });
   }
-  cover.addText(`Generated ${format(today, 'MMMM d, yyyy')}`, {
+  cover.addText(formatString(strings.Export_GeneratedDateLine, { date: format(today, 'MMMM d, yyyy') }), {
     x: 0, y: 7.15, w: 13.15, h: 0.3,
     fontSize: 10, color: '605E5C', align: 'right',
   });
@@ -934,17 +937,21 @@ export async function exportPortfolioToPowerPoint(
     x: 0, y: 0, w: 13.33, h: 0.75,
     fill: { color: ACCENT }, line: { color: ACCENT, width: 0 },
   });
-  table.addText('Project Summary', {
+  table.addText(strings.Export_ProjectsSummaryHeader, {
     x: 0.4, y: 0, w: 9, h: 0.75,
     fontSize: 20, color: 'FFFFFF', bold: true, valign: 'middle',
   });
-  table.addText(`${projects.length} Projects  ·  ${format(today, 'MMM d, yyyy')}`, {
+  table.addText(`${formatString(strings.Export_ProjectsCountLine, { count: projects.length })}  ·  ${format(today, 'MMM d, yyyy')}`, {
     x: 0, y: 0, w: 13.0, h: 0.75,
     fontSize: 12, color: 'FFFFFF', align: 'right', valign: 'middle', transparency: 35,
   });
 
   const COL_W = [3.0, 0.9, 1.0, 0.75, 0.75, 0.75, 0.75, 0.75, 0.75, 1.35];
-  const HDR   = ['Project', 'Status', 'Health', 'Total', 'Done', 'Active', 'At Risk', 'Overdue', '% Done', 'Due Date'];
+  const HDR   = [
+    strings.Export_TableProject, strings.Export_TableStatus, strings.Export_TableHealth, strings.Export_TableTotal,
+    strings.Export_TableDone, strings.Export_TableActive, strings.Export_TableAtRisk, strings.Export_TableOverdue,
+    strings.Export_TablePctDone, strings.Export_TableDueDate,
+  ];
 
   const hdrRow = HDR.map((h, _i) => ({
     text: h,
@@ -959,7 +966,7 @@ export async function exportPortfolioToPowerPoint(
   const dataRows = projects.map(p => {
     const s = statsMap?.get(p.id);
     const ok = s && !s.statsError;
-    const hLabel = s ? (s.statsError ? 'Unavailable' : portfolioHealthLabel(s.health)) : '—';
+    const hLabel = s ? (s.statsError ? strings.Export_UnavailableLabel : portfolioHealthLabel(s.health)) : '—';
     const hHex   = ok ? portfolioHealthHex(s!.health) : '323130';
     const rowBg  = 'FFFFFF';
 
@@ -990,5 +997,5 @@ export async function exportPortfolioToPowerPoint(
     fontSize: 10,
   });
 
-  await pptx.writeFile({ fileName: 'Portfolio Report.pptx' });
+  await pptx.writeFile({ fileName: strings.Export_PortfolioReportFileName });
 }

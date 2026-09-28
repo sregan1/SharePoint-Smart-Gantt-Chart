@@ -7,6 +7,7 @@ import {
 import { IProject, PROJECT_COLORS, PROJECT_STATUS_OPTIONS, ProjectStatus } from '../../models';
 import { toDateOnly } from '../../utils/dateUtils';
 import { ColorSwatchPicker } from '../common/ColorSwatchPicker';
+import * as strings from 'SmartGanttWebPartStrings';
 
 interface IProjectPanelProps {
   isOpen: boolean;
@@ -56,8 +57,8 @@ export const ProjectPanel: React.FC<IProjectPanelProps> = ({ isOpen, project, on
 
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
-    if (!title.trim()) errs.title = 'Project name is required.';
-    if (dueDate && startDate && dueDate < startDate) errs.dueDate = 'Due date must be on or after start date.';
+    if (!title.trim()) errs.title = strings.ProjectPanel_ProjectNameRequired;
+    if (dueDate && startDate && dueDate < startDate) errs.dueDate = strings.ProjectPanel_DueDateError;
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -77,37 +78,44 @@ export const ProjectPanel: React.FC<IProjectPanelProps> = ({ isOpen, project, on
         etag: project?.etag,
       });
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : 'Could not save the project.');
+      setSaveError(e instanceof Error ? e.message : strings.ProjectPanel_SaveFallbackError);
     } finally {
       setSaving(false);
     }
   };
 
   const handleDismiss = (): void => {
-    if (dirty && !saving && !window.confirm('Discard unsaved changes?')) return;
+    if (dirty && !saving && !window.confirm(strings.ProjectPanel_DiscardUnsavedChangesConfirm)) return;
     onDismiss();
   };
 
-  const statusOptions: IDropdownOption[] = PROJECT_STATUS_OPTIONS.map(s => ({ key: s, text: s }));
+  const statusLabels: Record<ProjectStatus, string> = {
+    'Planning': strings.ProjectStatus_Planning,
+    'Active': strings.ProjectStatus_Active,
+    'On Hold': strings.ProjectStatus_OnHold,
+    'Completed': strings.ProjectStatus_Completed,
+    'Cancelled': strings.ProjectStatus_Cancelled,
+  };
+  const statusOptions: IDropdownOption[] = PROJECT_STATUS_OPTIONS.map(s => ({ key: s, text: statusLabels[s] }));
 
   return (
     <Panel
       isOpen={isOpen}
       type={PanelType.smallFixedFar}
-      headerText={isEdit ? 'Edit Project' : 'New Project'}
+      headerText={isEdit ? strings.ProjectPanel_EditHeader : strings.ProjectPanel_NewHeader}
       onDismiss={handleDismiss}
       isFooterAtBottom
       onRenderFooterContent={() => (
         <Stack horizontal tokens={{ childrenGap: 10 }}>
           <PrimaryButton
-            text={saving ? '' : isEdit ? 'Save Changes' : 'Create Project'}
+            text={saving ? '' : isEdit ? strings.ProjectPanel_SaveChangesButton : strings.ProjectPanel_CreateProjectButton}
             onClick={handleSave}
             disabled={saving}
           >
             {saving && <Spinner size={SpinnerSize.small} style={{ marginRight: 6 }} />}
-            {saving ? (isEdit ? 'Saving…' : 'Creating…') : undefined}
+            {saving ? (isEdit ? strings.ProjectPanel_SavingLabel : strings.ProjectPanel_CreatingLabel) : undefined}
           </PrimaryButton>
-          <DefaultButton text="Cancel" onClick={handleDismiss} disabled={saving} />
+          <DefaultButton text={strings.ProjectPanel_CancelButton} onClick={handleDismiss} disabled={saving} />
         </Stack>
       )}
     >
@@ -115,7 +123,7 @@ export const ProjectPanel: React.FC<IProjectPanelProps> = ({ isOpen, project, on
         <MessageBar
           messageBarType={MessageBarType.error}
           onDismiss={() => setSaveError('')}
-          dismissButtonAriaLabel="Dismiss"
+          dismissButtonAriaLabel={strings.ProjectPanel_DismissAriaLabel}
           styles={{ root: { marginTop: 12 } }}
         >
           {saveError}
@@ -124,29 +132,29 @@ export const ProjectPanel: React.FC<IProjectPanelProps> = ({ isOpen, project, on
       <Stack tokens={{ childrenGap: 16 }} style={{ marginTop: 20 }}>
         {/* Project name */}
         <TextField
-          label="Project Name"
+          label={strings.ProjectPanel_ProjectNameLabel}
           value={title}
           onChange={(_, v) => { setTitle(v || ''); setErrors(p => ({ ...p, title: '' })); setDirty(true); }}
           required
           errorMessage={errors.title}
           autoFocus
-          placeholder="e.g. Website Redesign"
+          placeholder={strings.ProjectPanel_ProjectNamePlaceholder}
         />
 
         {/* Description */}
         <TextField
-          label="Description"
+          label={strings.ProjectPanel_DescriptionLabel}
           value={description}
           onChange={(_, v) => { setDescription(v || ''); setDirty(true); }}
           multiline
           rows={3}
-          placeholder="What is this project about?"
+          placeholder={strings.ProjectPanel_DescriptionPlaceholder}
           resizable={false}
         />
 
         {/* Color picker */}
         <div>
-          <Label>Project Color</Label>
+          <Label>{strings.ProjectPanel_ProjectColorLabel}</Label>
           <ColorSwatchPicker
             colors={PROJECT_COLORS}
             value={color}
@@ -157,7 +165,7 @@ export const ProjectPanel: React.FC<IProjectPanelProps> = ({ isOpen, project, on
 
         {/* Status */}
         <Dropdown
-          label="Status"
+          label={strings.ProjectPanel_StatusLabel}
           selectedKey={status}
           options={statusOptions}
           onChange={(_, opt) => { if (opt) { setStatus(opt.key as ProjectStatus); setDirty(true); } }}
@@ -167,7 +175,7 @@ export const ProjectPanel: React.FC<IProjectPanelProps> = ({ isOpen, project, on
         <Stack horizontal tokens={{ childrenGap: 12 }}>
           <Stack.Item grow>
             <TextField
-              label="Start Date"
+              label={strings.ProjectPanel_StartDateLabel}
               type="date"
               value={startDate}
               onChange={(_, v) => { setStartDate(v || ''); setDirty(true); }}
@@ -175,7 +183,7 @@ export const ProjectPanel: React.FC<IProjectPanelProps> = ({ isOpen, project, on
           </Stack.Item>
           <Stack.Item grow>
             <TextField
-              label="Due Date"
+              label={strings.ProjectPanel_DueDateLabel}
               type="date"
               value={dueDate}
               onChange={(_, v) => { setDueDate(v || ''); setErrors(p => ({ ...p, dueDate: '' })); setDirty(true); }}
@@ -200,7 +208,7 @@ export const ProjectPanel: React.FC<IProjectPanelProps> = ({ isOpen, project, on
               <span style={{ fontWeight: 600, fontSize: 14, color: '#323130' }}>{title}</span>
               <span style={{ fontSize: 11, color: color, fontWeight: 600, marginLeft: 'auto',
                 background: `${color}20`, padding: '2px 8px', borderRadius: 10 }}>
-                {status}
+                {statusLabels[status]}
               </span>
             </div>
             {description && (
@@ -216,9 +224,7 @@ export const ProjectPanel: React.FC<IProjectPanelProps> = ({ isOpen, project, on
             background: '#F3F2F1', borderRadius: 4, padding: '10px 12px',
             fontSize: 12, color: '#605E5C', lineHeight: 1.6,
           }}>
-            <strong>What happens next:</strong> A new SharePoint list will be created to store tasks
-            for this project. Standard columns (status, priority, dates, assignee, % complete, etc.)
-            are added automatically.
+            <strong>{strings.ProjectPanel_WhatHappensNextTitle}</strong> {strings.ProjectPanel_WhatHappensNextBody}
           </div>
         )}
       </Stack>

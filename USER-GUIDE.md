@@ -1,4 +1,4 @@
-# Smart Gantt Chart — User Guide · v1.3.0
+# Smart Gantt Chart — User Guide · v1.4.0
 
 ---
 
@@ -19,7 +19,8 @@
 13. [Importing Tasks](#13-importing-tasks)
 14. [Working with Multiple Projects](#14-working-with-multiple-projects) (archive, unarchive, delete)
 15. [Accessibility and Touch Support](#15-accessibility-and-touch-support)
-16. [Tips and Tricks](#16-tips-and-tricks)
+16. [Language Support](#16-language-support)
+17. [Tips and Tricks](#17-tips-and-tricks)
 
 ---
 
@@ -627,7 +628,26 @@ Dragging and resizing task bars on the Gantt chart works with touch and pen inpu
 
 ---
 
-## 16. Tips and Tricks
+## 16. Language Support
+
+Smart Gantt Chart's interface — toolbar, views, panels, settings, and export/import screens — is fully localized into 30 languages:
+
+Arabic · Chinese (Simplified) · Chinese (Traditional) · Czech · Danish · Dutch · English · Finnish · French · German · Greek · Hebrew · Hindi · Hungarian · Indonesian · Italian · Japanese · Korean · Norwegian Bokmål · Polish · Portuguese (Brazil) · Portuguese (Portugal) · Romanian · Russian · Spanish · Swedish · Thai · Turkish · Ukrainian · Vietnamese
+
+### How the language is chosen
+
+There is no language picker inside the web part. The displayed language automatically follows the **language of the SharePoint page**, which in turn follows the current user's personal language setting (or the site's default language, for a site without per-user language settings):
+
+- **Per-user:** each person can set their own preferred display language in **SharePoint → Settings (gear icon) → Language and time zone**. This affects what they see in Smart Gantt Chart without affecting any other user.
+- **Per-site:** if multi-language site features are enabled, site owners can set a default site language under **Site Settings → Language Settings**.
+
+If a user's selected language isn't one of the 30 above, the web part falls back to **English**.
+
+> **Note:** Only the on-screen labels, buttons, and messages are translated. Data you enter yourself — task names, descriptions, notes, phase names, and assignee names — always appears exactly as typed, in whatever language you entered it. Status and Priority values are stored internally in English and only their displayed label is translated, so filtering, sorting, and exports behave consistently regardless of a user's display language.
+
+---
+
+## 17. Tips and Tricks
 
 **Keep Phase names consistent**
 The Phase field autocompletes from existing values in the project. Using the same spelling every time ensures tasks are grouped correctly on the Gantt. A typo like "Desgin" instead of "Design" creates a separate group.

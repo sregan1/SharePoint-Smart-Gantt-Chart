@@ -12,6 +12,8 @@ import {
 import { AutocompleteField } from '../common/AutocompleteField';
 import { ColorSwatchPicker } from '../common/ColorSwatchPicker';
 import { toDateOnly } from '../../utils/dateUtils';
+import * as strings from 'SmartGanttWebPartStrings';
+import { formatString } from '../localeUtils';
 
 interface ITaskPanelProps {
   isOpen: boolean;
@@ -71,20 +73,20 @@ export const TaskPanel: React.FC<ITaskPanelProps> = ({
   };
 
   const handleDismiss = (): void => {
-    if (dirty && !saving && !window.confirm('Discard unsaved changes?')) return;
+    if (dirty && !saving && !window.confirm(strings.TaskPanel_DiscardUnsavedChangesConfirm)) return;
     onDismiss();
   };
 
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
-    if (!form.title?.trim()) errs.title = 'Task name is required.';
+    if (!form.title?.trim()) errs.title = strings.TaskPanel_TaskNameRequired;
     // Normalize both sides to YYYY-MM-DD before comparing — an edited field
     // holds a date-only string while an untouched one may still be a full ISO
     // value, and comparing those directly gives false positives.
     const start = toDateOnly(form.startDate);
     const due = toDateOnly(form.dueDate);
     if (due && start && due < start) {
-      errs.dueDate = 'Due date must be on or after start date.';
+      errs.dueDate = strings.TaskPanel_DueDateError;
     }
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -102,14 +104,27 @@ export const TaskPanel: React.FC<ITaskPanelProps> = ({
         dueDate: toDateOnly(form.dueDate),
       });
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : 'Could not save the task.');
+      setSaveError(e instanceof Error ? e.message : strings.TaskPanel_SaveFallbackError);
     } finally {
       setSaving(false);
     }
   };
 
-  const statusOptions: IDropdownOption[] = TASK_STATUS_OPTIONS.map(s => ({ key: s, text: s }));
-  const priorityOptions: IDropdownOption[] = TASK_PRIORITY_OPTIONS.map(p => ({ key: p, text: p }));
+  const statusLabels: Record<TaskStatus, string> = {
+    'Not Started': strings.Status_NotStarted,
+    'In Progress': strings.Status_InProgress,
+    'Completed': strings.Status_Completed,
+    'On Hold': strings.Status_OnHold,
+    'Cancelled': strings.Status_Cancelled,
+  };
+  const priorityLabels: Record<TaskPriority, string> = {
+    'Critical': strings.Priority_Critical,
+    'High': strings.Priority_High,
+    'Medium': strings.Priority_Medium,
+    'Low': strings.Priority_Low,
+  };
+  const statusOptions: IDropdownOption[] = TASK_STATUS_OPTIONS.map(s => ({ key: s, text: statusLabels[s] }));
+  const priorityOptions: IDropdownOption[] = TASK_PRIORITY_OPTIONS.map(p => ({ key: p, text: priorityLabels[p] }));
 
   // A task with sub-tasks of its own can't also become a sub-task itself —
   // the Gantt/List views only render one level of nesting, so a deeper chain
@@ -118,7 +133,7 @@ export const TaskPanel: React.FC<ITaskPanelProps> = ({
 
   // Parent task options — exclude self and already-children
   const parentOptions: IDropdownOption[] = [
-    { key: '', text: 'None (top-level task)' },
+    { key: '', text: strings.TaskPanel_ParentTaskNone },
     ...(hasChildren ? [] : tasks
       .filter(t => t.id !== task?.id && !t.parentTaskId)
       .map(t => ({ key: t.id, text: t.title }))),
@@ -149,7 +164,7 @@ export const TaskPanel: React.FC<ITaskPanelProps> = ({
   }, [tasks, task]);
 
   const addableDepOptions: IDropdownOption[] = [
-    { key: '', text: 'Select a task…' },
+    { key: '', text: strings.TaskPanel_SelectATaskOption },
     ...tasks
       .filter(t => t.id !== task?.id && !currentDeps.includes(t.id) && !dependentIds.has(t.id))
       .map(t => ({ key: t.id, text: t.title })),
@@ -182,7 +197,7 @@ export const TaskPanel: React.FC<ITaskPanelProps> = ({
     <Panel
       isOpen={isOpen}
       type={PanelType.medium}
-      headerText={isEdit ? `Edit: ${task!.title}` : 'New Task'}
+      headerText={isEdit ? formatString(strings.TaskPanel_EditHeader, { taskTitle: task!.title }) : strings.TaskPanel_NewTaskHeader}
       onDismiss={handleDismiss}
       isFooterAtBottom
       onRenderFooterContent={() => (
@@ -193,9 +208,9 @@ export const TaskPanel: React.FC<ITaskPanelProps> = ({
             style={{ minWidth: 120 }}
           >
             {saving && <Spinner size={SpinnerSize.small} style={{ marginRight: 6 }} />}
-            {saving ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save Changes' : 'Create Task')}
+            {saving ? (isEdit ? strings.TaskPanel_SavingLabel : strings.TaskPanel_CreatingLabel) : (isEdit ? strings.TaskPanel_SaveChangesButton : strings.TaskPanel_CreateTaskButton)}
           </PrimaryButton>
-          <DefaultButton text="Cancel" onClick={handleDismiss} disabled={saving} />
+          <DefaultButton text={strings.TaskPanel_CancelButton} onClick={handleDismiss} disabled={saving} />
         </Stack>
       )}
     >
@@ -204,7 +219,7 @@ export const TaskPanel: React.FC<ITaskPanelProps> = ({
           <MessageBar
             messageBarType={MessageBarType.error}
             onDismiss={() => setSaveError('')}
-            dismissButtonAriaLabel="Dismiss"
+            dismissButtonAriaLabel={strings.TaskPanel_DismissAriaLabel}
             styles={{ root: { marginTop: 8, marginBottom: 12 } }}
           >
             {saveError}
@@ -220,44 +235,44 @@ export const TaskPanel: React.FC<ITaskPanelProps> = ({
         }}>
           <div style={{ width: 10, height: 10, borderRadius: '50%', background: project.color }} />
           <span style={{ fontSize: 12, color: '#605E5C' }}>
-            Project: <strong style={{ color: '#323130' }}>{project.title}</strong>
+            {strings.TaskPanel_ProjectLabelPrefix}<strong style={{ color: '#323130' }}>{project.title}</strong>
           </span>
         </div>
 
         {/* Tabs */}
         <div style={{ display: 'flex', borderBottom: '1px solid #EDEBE9', marginBottom: 20 }}>
-          <button style={tabStyle('basic')} onClick={() => setActiveTab('basic')}>Basic</button>
-          <button style={tabStyle('details')} onClick={() => setActiveTab('details')}>Details</button>
-          <button style={tabStyle('links')} onClick={() => setActiveTab('links')}>Links</button>
+          <button style={tabStyle('basic')} onClick={() => setActiveTab('basic')}>{strings.TaskPanel_TabBasic}</button>
+          <button style={tabStyle('details')} onClick={() => setActiveTab('details')}>{strings.TaskPanel_TabDetails}</button>
+          <button style={tabStyle('links')} onClick={() => setActiveTab('links')}>{strings.TaskPanel_TabLinks}</button>
         </div>
 
         {/* ── BASIC TAB ── */}
         {activeTab === 'basic' && (
           <Stack tokens={{ childrenGap: 16 }}>
             <TextField
-              label="Task Name"
+              label={strings.TaskPanel_TaskNameLabel}
               value={form.title || ''}
               onChange={(_, v) => set('title', v || '')}
               required
               errorMessage={errors.title}
               autoFocus
-              placeholder="What needs to be done?"
+              placeholder={strings.TaskPanel_TaskNamePlaceholder}
             />
 
             <TextField
-              label="Description"
+              label={strings.TaskPanel_DescriptionLabel}
               value={form.description || ''}
               onChange={(_, v) => set('description', v || '')}
               multiline
               rows={2}
               resizable={false}
-              placeholder="Optional task description…"
+              placeholder={strings.TaskPanel_DescriptionPlaceholder}
             />
 
             <Stack horizontal tokens={{ childrenGap: 12 }}>
               <Stack.Item grow>
                 <TextField
-                  label="Start Date"
+                  label={strings.TaskPanel_StartDateLabel}
                   type="date"
                   value={form.startDate ? form.startDate.split('T')[0] : ''}
                   onChange={(_, v) => set('startDate', v || '')}
@@ -265,7 +280,7 @@ export const TaskPanel: React.FC<ITaskPanelProps> = ({
               </Stack.Item>
               <Stack.Item grow>
                 <TextField
-                  label="Due Date"
+                  label={strings.TaskPanel_DueDateLabel}
                   type="date"
                   value={form.dueDate ? form.dueDate.split('T')[0] : ''}
                   onChange={(_, v) => { set('dueDate', v || ''); }}
@@ -277,7 +292,7 @@ export const TaskPanel: React.FC<ITaskPanelProps> = ({
             <Stack horizontal tokens={{ childrenGap: 12 }}>
               <Stack.Item grow>
                 <Dropdown
-                  label="Status"
+                  label={strings.TaskPanel_StatusLabel}
                   selectedKey={form.status}
                   options={statusOptions}
                   onChange={(_, opt) => {
@@ -302,7 +317,7 @@ export const TaskPanel: React.FC<ITaskPanelProps> = ({
               </Stack.Item>
               <Stack.Item grow>
                 <Dropdown
-                  label="Priority"
+                  label={strings.TaskPanel_PriorityLabel}
                   selectedKey={form.priority}
                   options={priorityOptions}
                   onChange={(_, opt) => opt && set('priority', opt.key)}
@@ -322,7 +337,12 @@ export const TaskPanel: React.FC<ITaskPanelProps> = ({
 
             {/* Progress */}
             <div>
-              <Label>% Complete: <strong style={{ color: statusColor }}>{form.percentComplete}%</strong></Label>
+              <Label>{formatString(strings.TaskPanel_PercentCompleteLabel, { percent: `‹PCT›` }).split('‹PCT›').map((part, i, arr) => (
+                <React.Fragment key={i}>
+                  {part}
+                  {i < arr.length - 1 && <strong style={{ color: statusColor }}>{form.percentComplete}</strong>}
+                </React.Fragment>
+              ))}</Label>
               <Slider
                 min={0}
                 max={100}
@@ -350,11 +370,11 @@ export const TaskPanel: React.FC<ITaskPanelProps> = ({
             </div>
 
             <AutocompleteField
-              label="Assigned To"
+              label={strings.TaskPanel_AssignedToLabel}
               value={form.assignedTo || ''}
               suggestions={knownUsers}
               onChange={v => set('assignedTo', v)}
-              placeholder="Start typing a name…"
+              placeholder={strings.TaskPanel_AssignedToPlaceholder}
             />
           </Stack>
         )}
@@ -363,27 +383,27 @@ export const TaskPanel: React.FC<ITaskPanelProps> = ({
         {activeTab === 'details' && (
           <Stack tokens={{ childrenGap: 16 }}>
             <AutocompleteField
-              label="Phase"
+              label={strings.TaskPanel_PhaseLabel}
               value={form.phase || ''}
               suggestions={knownPhases}
               onChange={v => set('phase', v)}
-              placeholder="e.g. Discovery, Design, Development"
+              placeholder={strings.TaskPanel_PhasePlaceholder}
             />
             <div style={{ fontSize: 11, color: '#605E5C', marginTop: 4 }}>
-              Groups tasks visually on the Gantt. Start typing to see existing phases.
+              {strings.TaskPanel_PhaseHint}
             </div>
 
             <Toggle
-              label="Milestone"
+              label={strings.TaskPanel_MilestoneLabel}
               checked={form.isMilestone || false}
               onChange={(_, v) => set('isMilestone', v)}
-              onText="Yes — shown as ◆ on Gantt"
-              offText="No"
+              onText={strings.TaskPanel_MilestoneOnText}
+              offText={strings.TaskPanel_MilestoneOffText}
             />
 
             {/* Bar color override */}
             <div>
-              <Label>Custom Bar Color <span style={{ color: '#605E5C', fontWeight: 400 }}>(optional)</span></Label>
+              <Label>{strings.TaskPanel_CustomBarColorLabel} <span style={{ color: '#605E5C', fontWeight: 400 }}>{strings.TaskPanel_CustomBarColorOptionalSuffix}</span></Label>
               <ColorSwatchPicker
                 colors={PROJECT_COLORS}
                 value={form.color || ''}
@@ -392,19 +412,19 @@ export const TaskPanel: React.FC<ITaskPanelProps> = ({
               />
               {!form.color && (
                 <div style={{ fontSize: 11, color: '#605E5C', marginTop: 4 }}>
-                  Auto: color follows Display Settings
+                  {strings.TaskPanel_AutoColorHint}
                 </div>
               )}
             </div>
 
             <TextField
-              label="Notes"
+              label={strings.TaskPanel_NotesLabel}
               value={form.notes || ''}
               onChange={(_, v) => set('notes', v || '')}
               multiline
               rows={5}
               resizable={false}
-              placeholder="Additional notes, links, context…"
+              placeholder={strings.TaskPanel_NotesPlaceholder}
             />
           </Stack>
         )}
@@ -414,21 +434,21 @@ export const TaskPanel: React.FC<ITaskPanelProps> = ({
           <Stack tokens={{ childrenGap: 16 }}>
             <div>
               <Dropdown
-                label="Parent Task"
+                label={strings.TaskPanel_ParentTaskLabel}
                 selectedKey={form.parentTaskId ?? ''}
                 options={parentOptions}
                 onChange={(_, opt) => set('parentTaskId', opt?.key || null)}
               />
               <div style={{ fontSize: 11, color: '#605E5C', marginTop: 4 }}>
                 {hasChildren
-                  ? 'This task has sub-tasks and cannot be nested under another task.'
-                  : 'Makes this a sub-task, shown indented below the parent.'}
+                  ? strings.TaskPanel_ParentTaskHasChildrenHint
+                  : strings.TaskPanel_ParentTaskHint}
               </div>
             </div>
 
             {tasks.filter(t => t.id !== task?.id).length > 0 && (
               <div>
-                <Label>Depends On</Label>
+                <Label>{strings.TaskPanel_DependsOnLabel}</Label>
 
                 {/* Current dependencies as removable chips */}
                 {currentDeps.length > 0 && (
@@ -460,7 +480,7 @@ export const TaskPanel: React.FC<ITaskPanelProps> = ({
                               padding: '0 2px', color: '#0078D4', fontSize: 14,
                               lineHeight: 1, display: 'flex', alignItems: 'center',
                             }}
-                            title={`Remove dependency on "${dep.title}"`}
+                            title={formatString(strings.TaskPanel_RemoveDependencyTitle, { taskTitle: dep.title })}
                           >
                             ×
                           </button>
@@ -473,7 +493,7 @@ export const TaskPanel: React.FC<ITaskPanelProps> = ({
                 {/* Add a new dependency */}
                 {addableDepOptions.length > 1 && (
                   <Dropdown
-                    placeholder="Add a dependency…"
+                    placeholder={strings.TaskPanel_AddDependencyPlaceholder}
                     selectedKey={''}
                     options={addableDepOptions}
                     onChange={(_, opt) => {
@@ -483,8 +503,7 @@ export const TaskPanel: React.FC<ITaskPanelProps> = ({
                 )}
 
                 <div style={{ fontSize: 11, color: '#605E5C', marginTop: 6 }}>
-                  This task cannot start until all dependencies are complete.
-                  Arrows are drawn on the Gantt chart.
+                  {strings.TaskPanel_DependsOnHint}
                 </div>
               </div>
             )}

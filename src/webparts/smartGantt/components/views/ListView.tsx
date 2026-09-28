@@ -1,4 +1,6 @@
 import * as React from 'react';
+import * as strings from 'SmartGanttWebPartStrings';
+import { formatString } from '../localeUtils';
 import {
   ITask, IProject, TaskStatus, TaskPriority,
   STATUS_COLORS, STATUS_LIGHT_COLORS, PRIORITY_COLORS,
@@ -6,7 +8,7 @@ import {
 } from '../../models';
 import { computeTaskHealth, hasDependencyViolation } from '../../utils/healthUtils';
 import { formatDateOnly, parseDateOnly } from '../../utils/dateUtils';
-import { isOverdue, initials, stringToColor } from '../../utils/taskDisplayUtils';
+import { isOverdue, initials, stringToColor, getStatusLabel, getPriorityLabel } from '../../utils/taskDisplayUtils';
 import { HealthBadge } from '../common/HealthBadge';
 import styles from './ListView.module.scss';
 
@@ -165,7 +167,7 @@ export const ListView: React.FC<IListViewProps> = ({
       <div className={styles.listView}>
         <div className={styles.emptyState}>
           <div style={{ fontSize: 40, opacity: 0.3 }}>📋</div>
-          <div style={{ fontSize: 16, fontWeight: 600, color: '#323130' }}>No tasks yet</div>
+          <div style={{ fontSize: 16, fontWeight: 600, color: '#323130' }}>{strings.ListView_EmptyTitle}</div>
           <button
             style={{
               background: '#0078D4', color: '#fff', border: 'none', borderRadius: 4,
@@ -173,7 +175,7 @@ export const ListView: React.FC<IListViewProps> = ({
             }}
             onClick={onAddTask}
           >
-            + Add First Task
+            {strings.ListView_AddFirstTask}
           </button>
         </div>
       </div>
@@ -186,16 +188,16 @@ export const ListView: React.FC<IListViewProps> = ({
         <table>
           <thead className={styles.thead}>
             <tr>
-              <SortTh field="title" label="Task Name" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-              <SortTh field="status" label="Status" width={130} sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-              {showHealthBadges && <th style={{ width: 100 }}>Health</th>}
-              <SortTh field="priority" label="Priority" width={100} sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-              <SortTh field="startDate" label="Start" width={110} sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-              <SortTh field="dueDate" label="Due" width={110} sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-              <SortTh field="assignedTo" label="Assigned To" width={140} sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-              <SortTh field="percentComplete" label="Progress" width={140} sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-              <SortTh field="phase" label="Phase" width={110} sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-              <th style={{ width: 160 }}>Predecessors</th>
+              <SortTh field="title" label={strings.ListView_ColTaskName} sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+              <SortTh field="status" label={strings.ListView_ColStatus} width={130} sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+              {showHealthBadges && <th style={{ width: 100 }}>{strings.ListView_ColHealth}</th>}
+              <SortTh field="priority" label={strings.ListView_ColPriority} width={100} sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+              <SortTh field="startDate" label={strings.ListView_ColStart} width={110} sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+              <SortTh field="dueDate" label={strings.ListView_ColDue} width={110} sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+              <SortTh field="assignedTo" label={strings.ListView_ColAssignedTo} width={140} sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+              <SortTh field="percentComplete" label={strings.ListView_ColProgress} width={140} sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+              <SortTh field="phase" label={strings.ListView_ColPhase} width={110} sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+              <th style={{ width: 160 }}>{strings.ListView_ColPredecessors}</th>
               <th style={{ width: 72 }} />
             </tr>
           </thead>
@@ -236,7 +238,7 @@ export const ListView: React.FC<IListViewProps> = ({
                       </span>
                       {violationIds.has(task.id) && (
                         <span
-                          title="Started before all dependencies were completed"
+                          title={strings.ListView_DependencyViolationTooltip}
                           style={{ color: '#CA5010', fontSize: 12, flexShrink: 0 }}
                         >
                           ⚠
@@ -250,7 +252,7 @@ export const ListView: React.FC<IListViewProps> = ({
                     <select
                       className={styles.inlineSelect}
                       value={task.status}
-                      aria-label={`Status of ${task.title}`}
+                      aria-label={formatString(strings.ListView_StatusAriaLabel, { taskTitle: task.title })}
                       onChange={e => {
                         const status = e.target.value as TaskStatus;
                         const updates: Partial<ITask> = { status };
@@ -270,7 +272,7 @@ export const ListView: React.FC<IListViewProps> = ({
                       }}
                     >
                       {TASK_STATUS_OPTIONS.map(s => (
-                        <option key={s} value={s}>{s}</option>
+                        <option key={s} value={s}>{getStatusLabel(s)}</option>
                       ))}
                     </select>
                   </td>
@@ -287,7 +289,7 @@ export const ListView: React.FC<IListViewProps> = ({
                     <select
                       className={styles.inlineSelect}
                       value={task.priority}
-                      aria-label={`Priority of ${task.title}`}
+                      aria-label={formatString(strings.ListView_PriorityAriaLabel, { taskTitle: task.title })}
                       onChange={e => onTaskUpdate(task.id, { priority: e.target.value as TaskPriority })}
                       style={{
                         color: PRIORITY_COLORS[task.priority],
@@ -295,7 +297,7 @@ export const ListView: React.FC<IListViewProps> = ({
                       }}
                     >
                       {TASK_PRIORITY_OPTIONS.map(p => (
-                        <option key={p} value={p}>{p}</option>
+                        <option key={p} value={p}>{getPriorityLabel(p)}</option>
                       ))}
                     </select>
                   </td>
@@ -327,7 +329,7 @@ export const ListView: React.FC<IListViewProps> = ({
                         <span style={{ fontSize: 12 }}>{task.assignedTo.split(' ')[0]}</span>
                       </div>
                     ) : (
-                      <span style={{ color: '#C8C6C4', fontSize: 12 }}>Unassigned</span>
+                      <span style={{ color: '#C8C6C4', fontSize: 12 }}>{strings.ListView_Unassigned}</span>
                     )}
                   </td>
 
@@ -369,16 +371,16 @@ export const ListView: React.FC<IListViewProps> = ({
                       <button
                         className={styles.rowActionBtn}
                         onClick={() => onEditTask(task)}
-                        title="Edit"
-                        aria-label={`Edit task ${task.title}`}
+                        title={strings.ListView_EditTitle}
+                        aria-label={formatString(strings.ListView_EditTaskAriaLabel, { taskTitle: task.title })}
                       >
                         ✏
                       </button>
                       <button
                         className={`${styles.rowActionBtn} ${styles.deleteBtn}`}
                         onClick={() => onDeleteTask(task.id)}
-                        title="Delete"
-                        aria-label={`Delete task ${task.title}`}
+                        title={strings.ListView_DeleteTitle}
+                        aria-label={formatString(strings.ListView_DeleteTaskAriaLabel, { taskTitle: task.title })}
                       >
                         ✕
                       </button>
@@ -390,7 +392,7 @@ export const ListView: React.FC<IListViewProps> = ({
           </tbody>
         </table>
         <button className={styles.addRowBtn} onClick={onAddTask}>
-          + Add Task
+          {strings.ListView_AddTaskRow}
         </button>
       </div>
     </div>

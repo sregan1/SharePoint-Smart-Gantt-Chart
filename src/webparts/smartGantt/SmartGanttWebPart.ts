@@ -17,6 +17,7 @@ import '@pnp/sp/views';
 import SmartGantt from './components/SmartGantt';
 import { ISmartGanttProps } from './components/SmartGantt';
 import { SharePointService } from './services/SharePointService';
+import * as strings from 'SmartGanttWebPartStrings';
 
 export interface ISmartGanttWebPartProps {
   title: string;
@@ -33,7 +34,7 @@ export default class SmartGanttWebPart extends BaseClientSideWebPart<ISmartGantt
 
   public render(): void {
     const element: React.ReactElement<ISmartGanttProps> = React.createElement(SmartGantt, {
-      title: this.properties.title || 'Smart Gantt Chart',
+      title: this.properties.title || strings.WebPart_DefaultTitle,
       spService: this.spService,
       context: this.context,
     });
@@ -52,13 +53,13 @@ export default class SmartGanttWebPart extends BaseClientSideWebPart<ISmartGantt
     return {
       pages: [
         {
-          header: { description: 'Smart Gantt Chart Settings' },
+          header: { description: strings.PropertyPane_HeaderDescription },
           groups: [
             {
-              groupName: 'General',
+              groupName: strings.PropertyPane_GeneralGroupName,
               groupFields: [
                 PropertyPaneTextField('title', {
-                  label: 'Web Part Title',
+                  label: strings.PropertyPane_TitleFieldLabel,
                   value: this.properties.title,
                 }),
               ],

@@ -1,4 +1,5 @@
 import * as React from 'react';
+import * as strings from 'SmartGanttWebPartStrings';
 import { WebPartContext } from '@microsoft/sp-webpart-base';
 import {
   Spinner, SpinnerSize, Stack, Dialog, DialogType, DialogFooter,
@@ -22,6 +23,7 @@ import { ProjectPanel } from './panels/ProjectPanel';
 import { TaskPanel } from './panels/TaskPanel';
 import { ImportPanel } from './import/ImportPanel';
 import { DashboardView } from './views/DashboardView';
+import { formatString } from './localeUtils';
 
 import styles from './SmartGantt.module.scss';
 
@@ -246,7 +248,7 @@ export default class SmartGantt extends React.Component<ISmartGanttProps, ISmart
       if (!this._isMounted) return;
       this.setState({
         loading: false,
-        error: this._errMessage(err, 'Failed to load projects. Check site permissions.'),
+        error: this._errMessage(err, strings.SmartGantt_FailedLoadProjects),
       });
     }
   }
@@ -263,13 +265,18 @@ export default class SmartGantt extends React.Component<ISmartGanttProps, ISmart
       this.setState({
         tasks: [],
         tasksLoading: false,
-        tasksError: this._errMessage(err, 'Failed to load tasks for this project.'),
+        tasksError: this._errMessage(err, strings.SmartGantt_FailedLoadTasks),
       });
     }
   }
 
   private _handleSelectProject = async (project: IProject): Promise<void> => {
-    this.setState({ selectedProject: project, tasks: [], taskFilter: EMPTY_TASK_FILTER });
+    this.setState(prevState => ({
+      selectedProject: project,
+      tasks: [],
+      taskFilter: EMPTY_TASK_FILTER,
+      viewMode: prevState.viewMode === 'portfolio' ? 'gantt' : prevState.viewMode,
+    }));
     await this._loadTasks(project.listName);
   };
 
@@ -291,7 +298,7 @@ export default class SmartGantt extends React.Component<ISmartGanttProps, ISmart
       if (seq !== this._portfolioLoadSeq || !this._isMounted) return;
       this.setState({
         portfolioLoading: false,
-        saveError: this._errMessage(err, 'Failed to load portfolio statistics.'),
+        saveError: this._errMessage(err, strings.SmartGantt_FailedLoadPortfolioStats),
       });
     }
   };
@@ -346,7 +353,7 @@ export default class SmartGantt extends React.Component<ISmartGanttProps, ISmart
       }
       this.setState({ showProjectPanel: false, editingProject: null, portfolioStats: null });
     } catch (err) {
-      const message = `Could not save the project: ${this._errMessage(err, 'unknown error')}`;
+      const message = formatString(strings.SmartGantt_CouldNotSaveProject, { message: this._errMessage(err, 'unknown error') });
       this.setState({ saveError: message });
       // Re-thrown so the still-open panel can show the error inline instead
       // of it only appearing behind the modal overlay.
@@ -378,7 +385,7 @@ export default class SmartGantt extends React.Component<ISmartGanttProps, ISmart
     } catch (err) {
       this.setState({
         deleteProjectConfirm: false,
-        saveError: `Could not delete the project: ${this._errMessage(err, 'unknown error')}`,
+        saveError: formatString(strings.SmartGantt_CouldNotDeleteProject, { message: this._errMessage(err, 'unknown error') }),
       });
     }
   };
@@ -409,7 +416,7 @@ export default class SmartGantt extends React.Component<ISmartGanttProps, ISmart
     } catch (err) {
       this.setState({
         archiveProjectConfirm: false,
-        saveError: `Could not archive the project: ${this._errMessage(err, 'unknown error')}`,
+        saveError: formatString(strings.SmartGantt_CouldNotArchiveProject, { message: this._errMessage(err, 'unknown error') }),
       });
     }
   };
@@ -426,7 +433,7 @@ export default class SmartGantt extends React.Component<ISmartGanttProps, ISmart
       this.setState({ projects, selectedProject: selected, portfolioStats: null });
     } catch (err) {
       this.setState({
-        saveError: `Could not unarchive the project: ${this._errMessage(err, 'unknown error')}`,
+        saveError: formatString(strings.SmartGantt_CouldNotUnarchiveProject, { message: this._errMessage(err, 'unknown error') }),
       });
     }
   };
@@ -456,7 +463,7 @@ export default class SmartGantt extends React.Component<ISmartGanttProps, ISmart
       await this._loadTasks(selectedProject.listName);
       this.setState({ showTaskPanel: false, editingTask: null, portfolioStats: null });
     } catch (err) {
-      const message = `Could not save the task: ${this._errMessage(err, 'unknown error')}`;
+      const message = formatString(strings.SmartGantt_CouldNotSaveTask, { message: this._errMessage(err, 'unknown error') });
       this.setState({ saveError: message });
       // Re-thrown so the still-open panel can show the error inline instead
       // of it only appearing behind the modal overlay.
@@ -479,7 +486,7 @@ export default class SmartGantt extends React.Component<ISmartGanttProps, ISmart
       this.setState({ portfolioStats: null });
     } catch (err) {
       this.setState({
-        saveError: `Could not delete the task: ${this._errMessage(err, 'unknown error')}`,
+        saveError: formatString(strings.SmartGantt_CouldNotDeleteTask, { message: this._errMessage(err, 'unknown error') }),
       });
     }
   };
@@ -492,7 +499,7 @@ export default class SmartGantt extends React.Component<ISmartGanttProps, ISmart
       await downloadPNG(svg, `${selectedProject.title} - Gantt Chart.png`, 2);
     } catch (err) {
       this.setState({
-        saveError: `Image export failed: ${this._errMessage(err, 'unknown error')}`,
+        saveError: formatString(strings.SmartGantt_ImageExportFailed, { message: this._errMessage(err, 'unknown error') }),
       });
     }
   };
@@ -531,7 +538,7 @@ export default class SmartGantt extends React.Component<ISmartGanttProps, ISmart
       await exportToPowerPoint(selectedProject, tasks, ganttSettings);
     } catch (err) {
       this.setState({
-        saveError: `PowerPoint export failed: ${this._errMessage(err, 'unknown error')}`,
+        saveError: formatString(strings.SmartGantt_PowerPointExportFailed, { message: this._errMessage(err, 'unknown error') }),
       });
     }
   };
@@ -545,7 +552,7 @@ export default class SmartGantt extends React.Component<ISmartGanttProps, ISmart
       await exportPortfolioToPowerPoint(this.state.projects.filter(p => !p.isArchived), this.state.portfolioStats);
     } catch (err) {
       this.setState({
-        saveError: `Portfolio export failed: ${this._errMessage(err, 'unknown error')}`,
+        saveError: formatString(strings.SmartGantt_PortfolioExportFailed, { message: this._errMessage(err, 'unknown error') }),
       });
     }
   };
@@ -568,7 +575,7 @@ export default class SmartGantt extends React.Component<ISmartGanttProps, ISmart
       if (this.state.selectedProject?.id !== projectId) return;
       // Revert on error
       this.setState({
-        saveError: `Could not update the task: ${this._errMessage(err, 'unknown error')}`,
+        saveError: formatString(strings.SmartGantt_CouldNotUpdateTask, { message: this._errMessage(err, 'unknown error') }),
       });
       await this._loadTasks(selectedProject.listName);
     }
@@ -636,7 +643,7 @@ export default class SmartGantt extends React.Component<ISmartGanttProps, ISmart
           <MessageBar
             messageBarType={MessageBarType.error}
             onDismiss={() => this.setState({ saveError: null })}
-            dismissButtonAriaLabel="Dismiss"
+            dismissButtonAriaLabel={strings.SmartGantt_DismissAriaLabel}
           >
             {saveError}
           </MessageBar>
@@ -645,29 +652,29 @@ export default class SmartGantt extends React.Component<ISmartGanttProps, ISmart
         <div className={styles.viewContainer}>
           {loading && (
             <div className={styles.loadingContainer}>
-              <Spinner size={SpinnerSize.large} label="Loading projects…" />
+              <Spinner size={SpinnerSize.large} label={strings.SmartGantt_LoadingProjects} />
             </div>
           )}
 
           {!loading && error && (
             <div className={styles.errorContainer}>
-              <div className={styles.errorTitle}>⚠ Unable to load</div>
+              <div className={styles.errorTitle}>⚠ {strings.SmartGantt_UnableToLoad}</div>
               <div className={styles.errorMessage}>{error}</div>
-              <PrimaryButton text="Retry" onClick={() => void this._loadProjects()} />
+              <PrimaryButton text={strings.SmartGantt_RetryButton} onClick={() => void this._loadProjects()} />
             </div>
           )}
 
           {!loading && !error && !selectedProject && viewMode !== 'portfolio' && (
             <div className={styles.emptyState}>
               <div className={styles.emptyIcon}>📋</div>
-              <div className={styles.emptyTitle}>No projects yet</div>
+              <div className={styles.emptyTitle}>{strings.SmartGantt_NoProjectsYet}</div>
               <div className={styles.emptySubtitle}>
-                Create your first project to start managing tasks with Gantt charts, lists, and Kanban boards.
+                {strings.SmartGantt_NoProjectsSubtitle}
               </div>
               <Stack horizontal tokens={{ childrenGap: 10 }} horizontalAlign="center">
-                <PrimaryButton text="+ Create First Project" onClick={this._handleAddProject} />
+                <PrimaryButton text={strings.SmartGantt_CreateFirstProjectButton} onClick={this._handleAddProject} />
                 <DefaultButton
-                  text="Import from Excel…"
+                  text={strings.SmartGantt_ImportFromExcelButton}
                   onClick={() => this.setState({ showImportAsProject: true })}
                 />
               </Stack>
@@ -692,7 +699,7 @@ export default class SmartGantt extends React.Component<ISmartGanttProps, ISmart
             <>
               {tasksLoading && (
                 <div className={styles.loadingContainer} style={{ position: 'absolute', zIndex: 10, background: 'rgba(255,255,255,0.8)' }}>
-                  <Spinner size={SpinnerSize.medium} label="Loading tasks…" />
+                  <Spinner size={SpinnerSize.medium} label={strings.SmartGantt_LoadingTasks} />
                 </div>
               )}
 
@@ -701,7 +708,7 @@ export default class SmartGantt extends React.Component<ISmartGanttProps, ISmart
                   messageBarType={MessageBarType.warning}
                   actions={
                     <DefaultButton
-                      text="Retry"
+                      text={strings.SmartGantt_RetryButton}
                       onClick={() => { if (selectedProject) void this._loadTasks(selectedProject.listName); }}
                     />
                   }
@@ -827,14 +834,14 @@ export default class SmartGantt extends React.Component<ISmartGanttProps, ISmart
           onDismiss={() => this.setState({ deleteTaskConfirm: null })}
           dialogContentProps={{
             type: DialogType.normal,
-            title: 'Delete Task?',
-            subText: `"${deleteTaskConfirm?.title}" will be moved to the site recycle bin. You can restore it from there within 93 days.`,
+            title: strings.SmartGantt_DeleteTaskDialogTitle,
+            subText: formatString(strings.SmartGantt_DeleteTaskDialogSubtext, { taskTitle: deleteTaskConfirm?.title || '' }),
           }}
         >
           <DialogFooter>
-            <DefaultButton text="Cancel" onClick={() => this.setState({ deleteTaskConfirm: null })} />
+            <DefaultButton text={strings.SmartGantt_CancelButton} onClick={() => this.setState({ deleteTaskConfirm: null })} />
             <PrimaryButton
-              text="Delete"
+              text={strings.SmartGantt_DeleteButton}
               styles={{ root: { background: '#D13438', borderColor: '#D13438' } }}
               onClick={this._confirmDeleteTask}
             />
@@ -847,13 +854,13 @@ export default class SmartGantt extends React.Component<ISmartGanttProps, ISmart
           onDismiss={() => this.setState({ archiveProjectConfirm: false })}
           dialogContentProps={{
             type: DialogType.normal,
-            title: 'Archive Project?',
-            subText: `"${selectedProject?.title}" will be hidden from the project list and portfolio. You can restore it at any time via the project selector.`,
+            title: strings.SmartGantt_ArchiveProjectDialogTitle,
+            subText: formatString(strings.SmartGantt_ArchiveProjectDialogSubtext, { projectTitle: selectedProject?.title || '' }),
           }}
         >
           <DialogFooter>
-            <DefaultButton text="Cancel" onClick={() => this.setState({ archiveProjectConfirm: false })} />
-            <PrimaryButton text="Archive" onClick={this._confirmArchiveProject} />
+            <DefaultButton text={strings.SmartGantt_CancelButton} onClick={() => this.setState({ archiveProjectConfirm: false })} />
+            <PrimaryButton text={strings.SmartGantt_ArchiveButton} onClick={this._confirmArchiveProject} />
           </DialogFooter>
         </Dialog>
 
@@ -863,14 +870,14 @@ export default class SmartGantt extends React.Component<ISmartGanttProps, ISmart
           onDismiss={() => this.setState({ deleteProjectConfirm: false })}
           dialogContentProps={{
             type: DialogType.normal,
-            title: 'Send to Recycle Bin?',
-            subText: `"${selectedProject?.title}" and all its tasks will be moved to the SharePoint recycle bin. You can restore them from the recycle bin within 93 days.`,
+            title: strings.SmartGantt_SendToRecycleBinDialogTitle,
+            subText: formatString(strings.SmartGantt_SendToRecycleBinDialogSubtext, { projectTitle: selectedProject?.title || '' }),
           }}
         >
           <DialogFooter>
-            <DefaultButton text="Cancel" onClick={() => this.setState({ deleteProjectConfirm: false })} />
+            <DefaultButton text={strings.SmartGantt_CancelButton} onClick={() => this.setState({ deleteProjectConfirm: false })} />
             <PrimaryButton
-              text="Send to Recycle Bin"
+              text={strings.SmartGantt_SendToRecycleBinButton}
               styles={{ root: { background: '#D13438', borderColor: '#D13438' } }}
               onClick={this._confirmDeleteProject}
             />

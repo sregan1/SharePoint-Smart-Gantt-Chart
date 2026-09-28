@@ -1,11 +1,14 @@
 import * as React from 'react';
 import { addDays, differenceInCalendarDays } from 'date-fns';
+import * as strings from 'SmartGanttWebPartStrings';
+import { formatString } from '../localeUtils';
 import {
-  IProject, ITask, TaskStatus,
+  IProject, ITask, TaskStatus, TaskPriority,
   STATUS_COLORS, STATUS_LIGHT_COLORS, PRIORITY_COLORS, phaseColor,
   PROJECT_STATUS_COLORS, PROJECT_STATUS_LIGHT_COLORS,
 } from '../../models';
 import { parseDateOnly, formatDateOnly, todayLocalMidnight } from '../../utils/dateUtils';
+import { getStatusLabel, getPriorityLabel, getProjectStatusLabel } from '../../utils/taskDisplayUtils';
 
 interface IDashboardViewProps {
   project: IProject;
@@ -87,7 +90,7 @@ const TaskRow: React.FC<{ task: ITask; onClick: () => void; showDue?: boolean; i
           {task.isMilestone ? '◆ ' : ''}{task.title}
         </div>
         <div style={{ fontSize: 11, color: '#605E5C', marginTop: 1 }}>
-          <span style={{ color: sc }}>{task.status}</span>
+          <span style={{ color: sc }}>{getStatusLabel(task.status as TaskStatus)}</span>
           {task.percentComplete > 0 && <span>  •  {task.percentComplete}%</span>}
           {task.phase && <span>  •  {task.phase}</span>}
         </div>
@@ -212,34 +215,34 @@ export const DashboardView: React.FC<IDashboardViewProps> = ({
             background: PROJECT_STATUS_LIGHT_COLORS[project.status] || '#F3F2F1',
             color: PROJECT_STATUS_COLORS[project.status] || '#605E5C',
           }}>
-            {project.status}
+            {getProjectStatusLabel(project.status)}
           </div>
         </div>
       </div>
 
       {/* ── Stat cards ─────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20 }}>
-        <StatCard label="Total Tasks"  value={total}                   total={0}     color="#323130" bg="#F3F2F1" />
-        <StatCard label="Completed"    value={byStatus['Completed']}   total={total} color={STATUS_COLORS['Completed']}   bg={STATUS_LIGHT_COLORS['Completed']}   />
-        <StatCard label="In Progress"  value={byStatus['In Progress']} total={total} color={STATUS_COLORS['In Progress']} bg={STATUS_LIGHT_COLORS['In Progress']} />
-        <StatCard label="On Hold"      value={byStatus['On Hold']}     total={total} color={STATUS_COLORS['On Hold']}     bg={STATUS_LIGHT_COLORS['On Hold']}     />
-        <StatCard label="Not Started"  value={byStatus['Not Started']} total={total} color={STATUS_COLORS['Not Started']} bg={STATUS_LIGHT_COLORS['Not Started']} />
+        <StatCard label={strings.Dashboard_TotalTasks}  value={total}                   total={0}     color="#323130" bg="#F3F2F1" />
+        <StatCard label={strings.Dashboard_Completed}    value={byStatus['Completed']}   total={total} color={STATUS_COLORS['Completed']}   bg={STATUS_LIGHT_COLORS['Completed']}   />
+        <StatCard label={strings.Dashboard_InProgress}  value={byStatus['In Progress']} total={total} color={STATUS_COLORS['In Progress']} bg={STATUS_LIGHT_COLORS['In Progress']} />
+        <StatCard label={strings.Dashboard_OnHold}      value={byStatus['On Hold']}     total={total} color={STATUS_COLORS['On Hold']}     bg={STATUS_LIGHT_COLORS['On Hold']}     />
+        <StatCard label={strings.Dashboard_NotStarted}  value={byStatus['Not Started']} total={total} color={STATUS_COLORS['Not Started']} bg={STATUS_LIGHT_COLORS['Not Started']} />
         {byStatus['Cancelled'] > 0 && (
-          <StatCard label="Cancelled"  value={byStatus['Cancelled']}   total={total} color={STATUS_COLORS['Cancelled']}   bg={STATUS_LIGHT_COLORS['Cancelled']}   />
+          <StatCard label={strings.Dashboard_Cancelled}  value={byStatus['Cancelled']}   total={total} color={STATUS_COLORS['Cancelled']}   bg={STATUS_LIGHT_COLORS['Cancelled']}   />
         )}
       </div>
 
       {/* ── Overall progress ───────────────────────────────────────────── */}
       <div style={{ background: '#fff', borderRadius: 8, border: '1px solid #EDEBE9', padding: '16px 20px', marginBottom: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#323130' }}>Overall Progress</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#323130' }}>{strings.Dashboard_OverallProgress}</span>
           <span style={{ fontSize: 16, fontWeight: 700, color: project.color }}>{overallPct}%</span>
         </div>
         <div style={{ height: 10, background: '#EDEBE9', borderRadius: 5, overflow: 'hidden' }}>
           <div style={{ height: '100%', width: `${overallPct}%`, background: project.color, borderRadius: 5, transition: 'width 0.4s ease' }} />
         </div>
         {project.projectManager && (
-          <div style={{ fontSize: 11, color: '#8A8886', marginTop: 8 }}>Project Manager: {project.projectManager}</div>
+          <div style={{ fontSize: 11, color: '#8A8886', marginTop: 8 }}>{formatString(strings.Dashboard_ProjectManagerLabel, { name: project.projectManager })}</div>
         )}
       </div>
 
@@ -249,7 +252,7 @@ export const DashboardView: React.FC<IDashboardViewProps> = ({
         {/* Phase progress */}
         {phases.length > 0 && (
           <div style={{ background: '#fff', borderRadius: 8, border: '1px solid #EDEBE9', padding: '16px 20px' }}>
-            <SectionHeader title="Phase Progress" />
+            <SectionHeader title={strings.Dashboard_PhaseProgressHeader} />
             {phases.map(ph => (
               <div key={ph.name} style={{ marginBottom: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -270,14 +273,14 @@ export const DashboardView: React.FC<IDashboardViewProps> = ({
         {/* Status + Priority breakdown */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ background: '#fff', borderRadius: 8, border: '1px solid #EDEBE9', padding: '16px 20px', flex: 1 }}>
-            <SectionHeader title="Status Breakdown" />
+            <SectionHeader title={strings.Dashboard_StatusBreakdownHeader} />
             {(['Completed','In Progress','Not Started','On Hold','Cancelled'] as TaskStatus[]).map(s => {
               const cnt = byStatus[s] || 0;
               const pct = total > 0 ? Math.round(cnt / total * 100) : 0;
               return (
                 <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
                   <div style={{ width: 8, height: 8, borderRadius: '50%', background: STATUS_COLORS[s], flexShrink: 0 }} />
-                  <span style={{ fontSize: 12, color: '#323130', flex: 1 }}>{s}</span>
+                  <span style={{ fontSize: 12, color: '#323130', flex: 1 }}>{getStatusLabel(s)}</span>
                   <span style={{ fontSize: 12, fontWeight: 600, color: STATUS_COLORS[s], width: 24, textAlign: 'right' }}>{cnt}</span>
                   <div style={{ width: 80, height: 4, background: '#EDEBE9', borderRadius: 2, overflow: 'hidden' }}>
                     <div style={{ height: '100%', width: `${pct}%`, background: STATUS_COLORS[s], borderRadius: 2 }} />
@@ -289,14 +292,14 @@ export const DashboardView: React.FC<IDashboardViewProps> = ({
           </div>
 
           <div style={{ background: '#fff', borderRadius: 8, border: '1px solid #EDEBE9', padding: '16px 20px' }}>
-            <SectionHeader title="Priority Breakdown" />
+            <SectionHeader title={strings.Dashboard_PriorityBreakdownHeader} />
             {priorityItems.map(p => {
               const cnt = byPriority[p.label] || 0;
               const pct = total > 0 ? Math.round(cnt / total * 100) : 0;
               return (
                 <div key={p.label} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
                   <div style={{ width: 8, height: 8, borderRadius: '50%', background: p.color, flexShrink: 0 }} />
-                  <span style={{ fontSize: 12, color: '#323130', flex: 1 }}>{p.label}</span>
+                  <span style={{ fontSize: 12, color: '#323130', flex: 1 }}>{getPriorityLabel(p.label as TaskPriority)}</span>
                   <span style={{ fontSize: 12, fontWeight: 600, color: p.color, width: 24, textAlign: 'right' }}>{cnt}</span>
                   <div style={{ width: 80, height: 4, background: '#EDEBE9', borderRadius: 2, overflow: 'hidden' }}>
                     <div style={{ height: '100%', width: `${pct}%`, background: p.color, borderRadius: 2 }} />
@@ -315,7 +318,7 @@ export const DashboardView: React.FC<IDashboardViewProps> = ({
 
           {overdue.length > 0 && (
             <div style={{ background: '#fff', borderRadius: 8, border: '1px solid #EDEBE9', padding: '16px 20px' }}>
-              <SectionHeader title={`Overdue  (${overdue.length})`} />
+              <SectionHeader title={formatString(strings.Dashboard_OverdueHeader, { count: overdue.length })} />
               {overdue.map(t => (
                 <TaskRow key={t.id} task={t} onClick={() => onEditTask(t)} showDue isOverdue />
               ))}
@@ -324,7 +327,7 @@ export const DashboardView: React.FC<IDashboardViewProps> = ({
 
           {upcoming.length > 0 && (
             <div style={{ background: '#fff', borderRadius: 8, border: '1px solid #EDEBE9', padding: '16px 20px' }}>
-              <SectionHeader title={`Due in next 14 days  (${upcoming.length})`} />
+              <SectionHeader title={formatString(strings.Dashboard_DueNext14DaysHeader, { count: upcoming.length })} />
               {upcoming.map(t => {
                 const due = parseDateOnly(t.dueDate)!;
                 const daysLeft = differenceInCalendarDays(due, today);
@@ -339,7 +342,7 @@ export const DashboardView: React.FC<IDashboardViewProps> = ({
                       {t.isMilestone ? '◆ ' : ''}{t.title}
                     </span>
                     <span style={{ fontSize: 11, color: daysLeft <= 3 ? '#CA5010' : '#605E5C', fontWeight: daysLeft <= 3 ? 600 : 400, flexShrink: 0 }}>
-                      {daysLeft === 0 ? 'Today' : daysLeft === 1 ? 'Tomorrow' : `${daysLeft}d`}
+                      {daysLeft === 0 ? strings.Dashboard_Today : daysLeft === 1 ? strings.Dashboard_Tomorrow : formatString(strings.Dashboard_DaysLeft, { days: daysLeft })}
                     </span>
                   </div>
                 );
@@ -356,7 +359,7 @@ export const DashboardView: React.FC<IDashboardViewProps> = ({
 
           {recentlyCompleted.length > 0 && (
             <div style={{ background: '#fff', borderRadius: 8, border: '1px solid #EDEBE9', padding: '16px 20px' }}>
-              <SectionHeader title="Completed this week" />
+              <SectionHeader title={strings.Dashboard_CompletedThisWeekHeader} />
               {recentlyCompleted.map(t => (
                 <TaskRow key={t.id} task={t} onClick={() => onEditTask(t)} />
               ))}
@@ -365,7 +368,7 @@ export const DashboardView: React.FC<IDashboardViewProps> = ({
 
           {recentlyModified.length > 0 && (
             <div style={{ background: '#fff', borderRadius: 8, border: '1px solid #EDEBE9', padding: '16px 20px' }}>
-              <SectionHeader title="Updated this week" />
+              <SectionHeader title={strings.Dashboard_UpdatedThisWeekHeader} />
               {recentlyModified.map(t => (
                 <TaskRow key={t.id} task={t} onClick={() => onEditTask(t)} />
               ))}
@@ -379,8 +382,8 @@ export const DashboardView: React.FC<IDashboardViewProps> = ({
       {total === 0 && (
         <div style={{ textAlign: 'center', padding: '60px 0', color: '#605E5C' }}>
           <div style={{ fontSize: 32, marginBottom: 12 }}>📋</div>
-          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: '#323130' }}>No tasks yet</div>
-          <div style={{ fontSize: 13, marginBottom: 20 }}>Add your first task to see the project summary.</div>
+          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: '#323130' }}>{strings.Dashboard_EmptyTitle}</div>
+          <div style={{ fontSize: 13, marginBottom: 20 }}>{strings.Dashboard_EmptySubtitle}</div>
           <button
             onClick={onAddTask}
             style={{
@@ -388,7 +391,7 @@ export const DashboardView: React.FC<IDashboardViewProps> = ({
               border: 'none', borderRadius: 4, fontSize: 13, fontWeight: 600, cursor: 'pointer',
             }}
           >
-            + Add Task
+            {strings.Dashboard_AddTaskButton}
           </button>
         </div>
       )}

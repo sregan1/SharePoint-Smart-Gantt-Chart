@@ -4,6 +4,7 @@ import {
   IGanttDisplaySettings, GanttColorBy, GanttWeekLabel,
   GanttHeaderTheme, GanttBarStyle, HEADER_THEME_COLORS,
 } from '../../models';
+import * as strings from 'SmartGanttWebPartStrings';
 import styles from './GanttSettings.module.scss';
 
 interface IGanttSettingsProps {
@@ -21,42 +22,42 @@ export const GanttSettings: React.FC<IGanttSettingsProps> = ({
   };
 
   const colorOptions: { id: GanttColorBy; label: string; icon: string }[] = [
-    { id: 'status',   label: 'By Status',   icon: '⬛' },
-    { id: 'priority', label: 'By Priority', icon: '🔺' },
-    { id: 'phase',    label: 'By Phase',    icon: '🏷' },
-    { id: 'health',   label: 'By Health',   icon: '❤' },
+    { id: 'status',   label: strings.GanttSettings_ByStatus,   icon: '⬛' },
+    { id: 'priority', label: strings.GanttSettings_ByPriority, icon: '🔺' },
+    { id: 'phase',    label: strings.GanttSettings_ByPhase,    icon: '🏷' },
+    { id: 'health',   label: strings.GanttSettings_ByHealth,   icon: '❤' },
   ];
 
   const weekOptions: { id: GanttWeekLabel; label: string; desc: string }[] = [
-    { id: 'dates',   label: 'Dates',          desc: 'Jun 3, Jun 10…' },
-    { id: 'project', label: 'Project Weeks',  desc: 'W1, W2…' },
-    { id: 'iso',     label: 'Calendar Weeks', desc: 'W23, W24…' },
+    { id: 'dates',   label: strings.GanttSettings_WeekLabelDates,   desc: strings.GanttSettings_WeekLabelDatesDesc },
+    { id: 'project', label: strings.GanttSettings_WeekLabelProject, desc: strings.GanttSettings_WeekLabelProjectDesc },
+    { id: 'iso',     label: strings.GanttSettings_WeekLabelIso,     desc: strings.GanttSettings_WeekLabelIsoDesc },
   ];
 
   const barOptions: { id: GanttBarStyle; label: string }[] = [
-    { id: 'gradient', label: 'Gradient' },
-    { id: 'flat',     label: 'Flat' },
+    { id: 'gradient', label: strings.GanttSettings_BarStyleGradient },
+    { id: 'flat',     label: strings.GanttSettings_BarStyleFlat },
   ];
 
   const themes: { id: GanttHeaderTheme; label: string }[] = [
-    { id: 'dark',   label: 'Dark' },
-    { id: 'navy',   label: 'Navy' },
-    { id: 'teal',   label: 'Teal' },
-    { id: 'purple', label: 'Purple' },
-    { id: 'light',  label: 'Light' },
+    { id: 'dark',   label: strings.GanttSettings_ThemeDark },
+    { id: 'navy',   label: strings.GanttSettings_ThemeNavy },
+    { id: 'teal',   label: strings.GanttSettings_ThemeTeal },
+    { id: 'purple', label: strings.GanttSettings_ThemePurple },
+    { id: 'light',  label: strings.GanttSettings_ThemeLight },
   ];
 
   const heights: { value: number; label: string; barH: number }[] = [
-    { value: 36, label: 'Compact',  barH: 3 },
-    { value: 40, label: 'Normal',   barH: 5 },
-    { value: 52, label: 'Spacious', barH: 7 },
+    { value: 36, label: strings.GanttSettings_HeightCompact,  barH: 3 },
+    { value: 40, label: strings.GanttSettings_HeightNormal,   barH: 5 },
+    { value: 52, label: strings.GanttSettings_HeightSpacious, barH: 7 },
   ];
 
   return (
     <Panel
       isOpen={isOpen}
       type={PanelType.smallFixedFar}
-      headerText="⚙ Options"
+      headerText={strings.GanttSettings_PanelHeader}
       onDismiss={onDismiss}
       isLightDismiss
       isBlocking={false}
@@ -65,7 +66,7 @@ export const GanttSettings: React.FC<IGanttSettingsProps> = ({
 
         {/* ── Color coding ─────────────────────────────────────────────── */}
         <div className={styles.section}>
-          <div className={styles.sectionTitle}>Color Coding</div>
+          <div className={styles.sectionTitle}>{strings.GanttSettings_ColorCodingSection}</div>
           <div className={styles.chipGroup}>
             {colorOptions.map(o => (
               <button
@@ -81,7 +82,7 @@ export const GanttSettings: React.FC<IGanttSettingsProps> = ({
 
         {/* ── Header theme ──────────────────────────────────────────────── */}
         <div className={styles.section}>
-          <div className={styles.sectionTitle}>Header Color</div>
+          <div className={styles.sectionTitle}>{strings.GanttSettings_HeaderColorSection}</div>
           <div className={styles.themeGrid}>
             {themes.map(t => (
               <button
@@ -102,7 +103,7 @@ export const GanttSettings: React.FC<IGanttSettingsProps> = ({
 
         {/* ── Header labels ─────────────────────────────────────────────── */}
         <div className={styles.section}>
-          <div className={styles.sectionTitle}>Header Labels</div>
+          <div className={styles.sectionTitle}>{strings.GanttSettings_HeaderLabelsSection}</div>
           <div className={styles.chipGroup}>
             {weekOptions.map(o => (
               <button
@@ -118,14 +119,14 @@ export const GanttSettings: React.FC<IGanttSettingsProps> = ({
           </div>
           {settings.weekLabel === 'project' && (
             <div style={{ fontSize: 12, color: '#605E5C', marginTop: 4 }}>
-              Week 1 starts from the Monday of your earliest task — great for presentations.
+              {strings.GanttSettings_ProjectWeeksHint}
             </div>
           )}
         </div>
 
         {/* ── Bar style ─────────────────────────────────────────────────── */}
         <div className={styles.section}>
-          <div className={styles.sectionTitle}>Bar Style</div>
+          <div className={styles.sectionTitle}>{strings.GanttSettings_BarStyleSection}</div>
           <div className={styles.chipGroup}>
             {barOptions.map(o => (
               <button
@@ -141,7 +142,7 @@ export const GanttSettings: React.FC<IGanttSettingsProps> = ({
 
         {/* ── Row height ────────────────────────────────────────────────── */}
         <div className={styles.section}>
-          <div className={styles.sectionTitle}>Row Height</div>
+          <div className={styles.sectionTitle}>{strings.GanttSettings_RowHeightSection}</div>
           <div className={styles.heightGroup}>
             {heights.map(h => (
               <button
@@ -162,22 +163,22 @@ export const GanttSettings: React.FC<IGanttSettingsProps> = ({
 
         {/* ── Toggles ───────────────────────────────────────────────────── */}
         <div className={styles.section}>
-          <div className={styles.sectionTitle}>Show / Hide</div>
-          {([['showWeekends', 'Weekend shading']] as const).map(([key, label]) => (
+          <div className={styles.sectionTitle}>{strings.GanttSettings_ShowHideSection}</div>
+          {([['showWeekends', strings.GanttSettings_WeekendShading]] as const).map(([key, label]) => (
             <div key={key} className={styles.toggleRow}>
               <span className={styles.toggleLabel}>{label}</span>
               <Toggle checked={settings[key]} onChange={(_, v) => set(key, !!v)} ariaLabel={label} styles={{ root: { margin: 0 } }} />
             </div>
           ))}
           <div className={styles.toggleRow}>
-            <span className={styles.toggleLabel}>Dependency arrows</span>
-            <Toggle checked={settings.showDependencies} onChange={(_, v) => set('showDependencies', !!v)} ariaLabel="Dependency arrows" styles={{ root: { margin: 0 } }} />
+            <span className={styles.toggleLabel}>{strings.GanttSettings_DependencyArrows}</span>
+            <Toggle checked={settings.showDependencies} onChange={(_, v) => set('showDependencies', !!v)} ariaLabel={strings.GanttSettings_DependencyArrows} styles={{ root: { margin: 0 } }} />
           </div>
           {settings.showDependencies && (
             <>
               {([
-                ['showCriticalPathOnly', 'Critical path always visible'],
-                ['dependenciesOnHover',  'All others on hover only'],
+                ['showCriticalPathOnly', strings.GanttSettings_CriticalPathAlwaysVisible],
+                ['dependenciesOnHover',  strings.GanttSettings_AllOthersOnHoverOnly],
               ] as const).map(([key, label]) => (
                 <div key={key} className={styles.toggleRow} style={{ paddingLeft: 20 }}>
                   <span className={styles.toggleLabel} style={{ color: '#605E5C' }}>{label}</span>
@@ -187,10 +188,10 @@ export const GanttSettings: React.FC<IGanttSettingsProps> = ({
             </>
           )}
           {([
-            ['showCriticalPath', 'Critical path highlight'],
-            ['showProgressText', 'Progress % on bars'],
-            ['showAssignee',     'Assignee name on bars'],
-            ['showHealthBadges', 'Health status badges'],
+            ['showCriticalPath', strings.GanttSettings_CriticalPathHighlight],
+            ['showProgressText', strings.GanttSettings_ProgressPercentOnBars],
+            ['showAssignee',     strings.GanttSettings_AssigneeNameOnBars],
+            ['showHealthBadges', strings.GanttSettings_HealthStatusBadges],
           ] as const).map(([key, label]) => (
             <div key={key} className={styles.toggleRow}>
               <span className={styles.toggleLabel}>{label}</span>

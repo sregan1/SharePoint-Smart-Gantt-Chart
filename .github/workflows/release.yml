@@ -6,7 +6,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*.*.*'
 
 permissions:
   contents: write
@@ -47,9 +47,21 @@ jobs:
             echo "See CHANGELOG.md for details." > release_notes.md
           fi
 
+      - name: Prepend installation instructions
+        run: |
+          {
+            echo "## Installation"
+            echo ""
+            echo "1. Download \`sharepoint-smart-gantt-chart.sppkg\`"
+            echo "2. Upload to your SharePoint App Catalog"
+            echo "3. Deploy tenant-wide or to specific sites"
+            echo ""
+          } > full-release-notes.md
+          cat release_notes.md >> full-release-notes.md
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: ${{ github.ref_name }}
-          body_path: release_notes.md
+          body_path: full-release-notes.md
           files: sharepoint/solution/*.sppkg

@@ -4,6 +4,8 @@ import {
   ITaskFilter, isFilterActive, DueFilter,
   TASK_STATUS_OPTIONS, TASK_PRIORITY_OPTIONS, TaskStatus, TaskPriority,
 } from '../../models';
+import * as strings from 'SmartGanttWebPartStrings';
+import { formatString } from '../localeUtils';
 
 interface IFilterBarProps {
   filter: ITaskFilter;
@@ -50,7 +52,9 @@ function MultiChip<T extends string>({ label, options, selected, onChange }: IMu
         aria-haspopup="true"
         aria-expanded={open}
       >
-        {label}{active ? ` (${selected.length})` : ''} ▾
+        {active
+          ? formatString(strings.FilterBar_ChipLabelWithCount, { label, count: selected.length })
+          : formatString(strings.FilterBar_ChipLabelNoCount, { label })}
       </button>
       {open && (
         <Callout
@@ -78,7 +82,7 @@ function MultiChip<T extends string>({ label, options, selected, onChange }: IMu
                 }}
                 onClick={() => onChange([])}
               >
-                Clear
+                {strings.FilterBar_ClearOption}
               </button>
             )}
           </div>
@@ -89,10 +93,10 @@ function MultiChip<T extends string>({ label, options, selected, onChange }: IMu
 }
 
 const DUE_OPTIONS: { id: DueFilter; label: string }[] = [
-  { id: 'all', label: 'Any due date' },
-  { id: 'overdue', label: 'Overdue' },
-  { id: 'today', label: 'Due today' },
-  { id: 'week', label: 'Due in 7 days' },
+  { id: 'all', label: strings.FilterBar_DueAny },
+  { id: 'overdue', label: strings.FilterBar_DueOverdue },
+  { id: 'today', label: strings.FilterBar_DueToday },
+  { id: 'week', label: strings.FilterBar_DueWeek },
 ];
 
 const FilterBarComponent: React.FC<IFilterBarProps> = ({
@@ -129,8 +133,8 @@ const FilterBarComponent: React.FC<IFilterBarProps> = ({
         type="search"
         value={localText}
         onChange={e => handleTextChange(e.target.value)}
-        placeholder="Search tasks…"
-        aria-label="Search tasks"
+        placeholder={strings.FilterBar_SearchPlaceholder}
+        aria-label={strings.FilterBar_SearchAriaLabel}
         style={{
           width: 160,
           padding: '4px 10px',
@@ -142,20 +146,20 @@ const FilterBarComponent: React.FC<IFilterBarProps> = ({
         }}
       />
       <MultiChip<TaskStatus>
-        label="Status"
+        label={strings.FilterBar_StatusChipLabel}
         options={TASK_STATUS_OPTIONS}
         selected={filter.statuses}
         onChange={v => set('statuses', v)}
       />
       <MultiChip<TaskPriority>
-        label="Priority"
+        label={strings.FilterBar_PriorityChipLabel}
         options={TASK_PRIORITY_OPTIONS}
         selected={filter.priorities}
         onChange={v => set('priorities', v)}
       />
       {assignees.length > 0 && (
         <MultiChip<string>
-          label="Assignee"
+          label={strings.FilterBar_AssigneeChipLabel}
           options={assignees}
           selected={filter.assignees}
           onChange={v => set('assignees', v)}
@@ -163,7 +167,7 @@ const FilterBarComponent: React.FC<IFilterBarProps> = ({
       )}
       {phases.length > 0 && (
         <MultiChip<string>
-          label="Phase"
+          label={strings.FilterBar_PhaseChipLabel}
           options={phases}
           selected={filter.phases}
           onChange={v => set('phases', v)}
@@ -172,7 +176,7 @@ const FilterBarComponent: React.FC<IFilterBarProps> = ({
       <select
         value={filter.due}
         onChange={e => set('due', e.target.value as DueFilter)}
-        aria-label="Filter by due date"
+        aria-label={strings.FilterBar_DueDateAriaLabel}
         style={{
           ...chipStyle(filter.due !== 'all'),
           appearance: 'none',
@@ -187,7 +191,7 @@ const FilterBarComponent: React.FC<IFilterBarProps> = ({
       {active && (
         <>
           <span style={{ fontSize: 12, color: '#605E5C' }}>
-            {matchCount} of {totalCount}
+            {formatString(strings.FilterBar_MatchCount, { matchCount, totalCount })}
           </span>
           <button
             style={{
@@ -200,7 +204,7 @@ const FilterBarComponent: React.FC<IFilterBarProps> = ({
               onChange({ text: '', statuses: [], priorities: [], assignees: [], phases: [], due: 'all' });
             }}
           >
-            ✕ Clear filters
+            {strings.FilterBar_ClearFilters}
           </button>
         </>
       )}

@@ -7,6 +7,9 @@ interface IHealthBadgeProps {
   size?: 'sm' | 'md';
 }
 
+// Health is always conveyed by the text label as well as the colored dot, so
+// it never relies on color alone. The dot is decorative (aria-hidden) and
+// opts out of forced-colors repainting so it stays visible in high contrast.
 export const HealthBadge: React.FC<IHealthBadgeProps> = ({ health, size = 'sm' }) => {
   const color = healthColor(health);
   const bg = healthLightColor(health);
@@ -23,14 +26,15 @@ export const HealthBadge: React.FC<IHealthBadgeProps> = ({ health, size = 'sm' }
         color,
         whiteSpace: 'nowrap',
       }}>
-        <span style={{
+        <span aria-hidden="true" style={{
           width: 6,
           height: 6,
           borderRadius: '50%',
           backgroundColor: color,
           flexShrink: 0,
           display: 'inline-block',
-        }} />
+          forcedColorAdjust: 'none',
+        } as React.CSSProperties} />
         {label}
       </span>
     );
@@ -50,14 +54,15 @@ export const HealthBadge: React.FC<IHealthBadgeProps> = ({ health, size = 'sm' }
       color,
       whiteSpace: 'nowrap',
     }}>
-      <span style={{
+      <span aria-hidden="true" style={{
         width: 7,
         height: 7,
         borderRadius: '50%',
         backgroundColor: color,
         flexShrink: 0,
         display: 'inline-block',
-      }} />
+        forcedColorAdjust: 'none',
+      } as React.CSSProperties} />
       {label}
     </span>
   );

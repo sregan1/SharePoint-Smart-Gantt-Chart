@@ -2,13 +2,15 @@ import * as React from 'react';
 import * as strings from 'SmartGanttWebPartStrings';
 import { formatString } from '../localeUtils';
 import {
-  ITask, IProject, TaskStatus, TaskPriority,
+  ITask, IProject, TaskStatus, TaskPriority, IWorkingCalendar, TaskHealth,
   STATUS_COLORS, STATUS_LIGHT_COLORS, PRIORITY_COLORS,
   TASK_STATUS_OPTIONS, TASK_PRIORITY_OPTIONS,
 } from '../../models';
 import { computeTaskHealth, hasDependencyViolation } from '../../utils/healthUtils';
-import { formatDateOnly, parseDateOnly } from '../../utils/dateUtils';
+import { formatDateOnly, parseDateOnly, toDateOnly } from '../../utils/dateUtils';
+import { isWorkingDay } from '../../utils/scheduleUtils';
 import { isOverdue, initials, stringToColor, getStatusLabel, getPriorityLabel } from '../../utils/taskDisplayUtils';
+import { exportTasksCsv } from '../../services/ExportService';
 import { HealthBadge } from '../common/HealthBadge';
 import styles from './ListView.module.scss';
 
@@ -20,9 +22,17 @@ interface IListViewProps {
   onDeleteTask: (id: number) => void;
   onTaskUpdate: (id: number, updates: Partial<ITask>) => void;
   onAddTask: () => void;
+  /** Deletes several tasks at once (the caller owns confirmation). The bulk
+   *  "Delete selected" action is only offered when this is provided. */
+  onBulkDelete?: (ids: number[]) => void;
+  /** Working calendar — start/due dates on non-working days are marked. */
+  calendar?: IWorkingCalendar;
 }
 
-type SortField = 'sortOrder' | 'title' | 'startDate' | 'dueDate' | 'status' | 'priority' | 'assignedTo' | 'percentComplete' | 'phase';
+// Worst health first when sorting ascending.
+const HEALTH_SORT_ORDER: Record<TaskHealth, number> = { overdue: 0, 'at-risk': 1, 'on-track': 2, complete: 3 };
+
+type SortField = 'sortOrder' | 'title' | 'startDate' | 'dueDate' | 'status' | 'priority' | 'assignedTo' | 'percentComplete' | 'phase' | 'health';
 type SortDir = 'asc' | 'desc';
 
 interface ISortThProps {
@@ -56,11 +66,100 @@ const SortTh: React.FC<ISortThProps> = ({ field, label, width, sortField, sortDi
   </th>
 );
 
+// Keep % complete and status consistent when either is bulk-edited, matching
+// the task panel's slider behavior.
+function statusForPercent(task: ITask, v: number): TaskStatus | undefined {
+  if (v === 100 && task.status !== 'Cancelled') return 'Completed';
+  if (v > 0 && v < 100 && (task.status === 'Not Started' || task.status === 'Completed')) return 'In Progress';
+  if (v === 0 && task.status === 'Completed') return 'Not Started';
+  return undefined;
+}
+
 export const ListView: React.FC<IListViewProps> = ({
-  tasks, showHealthBadges = true, onEditTask, onDeleteTask, onTaskUpdate, onAddTask,
+  tasks, project, showHealthBadges = true, onEditTask, onDeleteTask, onTaskUpdate, onAddTask, onBulkDelete, calendar,
 }) => {
   const [sortField, setSortField] = React.useState<SortField>('sortOrder');
   const [sortDir, setSortDir] = React.useState<SortDir>('asc');
+  const [selected, setSelected] = React.useState<Set<number>>(new Set());
+  const [bulkAssignee, setBulkAssignee] = React.useState('');
+  const [bulkPercent, setBulkPercent] = React.useState('');
+  const selectAllRef = React.useRef<HTMLInputElement>(null);
+
+  // Drop selections for tasks that are gone (deleted, or filtered out).
+  React.useEffect(() => {
+    setSelected(prev => {
+      if (prev.size === 0) return prev;
+      const ids = new Set(tasks.map(t => t.id));
+      const next = new Set<number>();
+      prev.forEach(id => { if (ids.has(id)) next.add(id); });
+      return next.size === prev.size ? prev : next;
+    });
+  }, [tasks]);
+
+  const allSelected = tasks.length > 0 && selected.size === tasks.length;
+  React.useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = selected.size > 0 && !allSelected;
+  }, [selected, allSelected]);
+
+  const toggleSelected = (id: number): void => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = (): void => {
+    setSelected(allSelected ? new Set() : new Set(tasks.map(t => t.id)));
+  };
+
+  // Bulk edits reuse the single-task update path, one call per selected task.
+  const applyBulk = (updatesFor: (t: ITask) => Partial<ITask> | null): void => {
+    tasks.forEach(t => {
+      if (!selected.has(t.id)) return;
+      const updates = updatesFor(t);
+      if (updates) onTaskUpdate(t.id, updates);
+    });
+  };
+
+  const bulkSetStatus = (status: TaskStatus): void => {
+    applyBulk(t => {
+      if (t.status === status) return null;
+      const updates: Partial<ITask> = { status };
+      if (status === 'Completed' && t.percentComplete < 100) updates.percentComplete = 100;
+      if (status === 'Not Started' && t.percentComplete > 0) updates.percentComplete = 0;
+      return updates;
+    });
+  };
+
+  const bulkSetPriority = (priority: TaskPriority): void => {
+    applyBulk(t => (t.priority === priority ? null : { priority }));
+  };
+
+  const bulkSetAssignee = (): void => {
+    const name = bulkAssignee.trim();
+    applyBulk(t => (t.assignedTo === name ? null : { assignedTo: name, assignedToEmail: '' }));
+    setBulkAssignee('');
+  };
+
+  const bulkSetPercent = (): void => {
+    const n = parseInt(bulkPercent, 10);
+    if (isNaN(n)) return;
+    const v = Math.min(100, Math.max(0, n));
+    applyBulk(t => {
+      const updates: Partial<ITask> = { percentComplete: v };
+      const status = statusForPercent(t, v);
+      if (status) updates.status = status;
+      return updates;
+    });
+    setBulkPercent('');
+  };
+
+  const isNonWorking = (date: string): boolean => {
+    if (!calendar || !date) return false;
+    const d = toDateOnly(date);
+    return !!d && !isWorkingDay(d, calendar);
+  };
 
   const handleSort = (field: SortField): void => {
     if (sortField === field) {
@@ -110,6 +209,8 @@ export const ListView: React.FC<IListViewProps> = ({
         const av = parseDateOnly(a[sortField])?.getTime() ?? UNDATED;
         const bv = parseDateOnly(b[sortField])?.getTime() ?? UNDATED;
         cmp = av - bv;
+      } else if (sortField === 'health') {
+        cmp = HEALTH_SORT_ORDER[computeTaskHealth(a)] - HEALTH_SORT_ORDER[computeTaskHealth(b)];
       } else if (sortField === 'percentComplete' || sortField === 'sortOrder') {
         cmp = a[sortField] - b[sortField];
       } else if (sortField === 'priority') {
@@ -167,10 +268,10 @@ export const ListView: React.FC<IListViewProps> = ({
       <div className={styles.listView}>
         <div className={styles.emptyState}>
           <div style={{ fontSize: 40, opacity: 0.3 }}>📋</div>
-          <div style={{ fontSize: 16, fontWeight: 600, color: '#323130' }}>{strings.ListView_EmptyTitle}</div>
+          <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--neutralPrimary, #323130)' }}>{strings.ListView_EmptyTitle}</div>
           <button
             style={{
-              background: '#0078D4', color: '#fff', border: 'none', borderRadius: 4,
+              background: 'var(--themePrimary, #0078D4)', color: '#fff', border: 'none', borderRadius: 4,
               padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
             }}
             onClick={onAddTask}
@@ -184,13 +285,89 @@ export const ListView: React.FC<IListViewProps> = ({
 
   return (
     <div className={styles.listView}>
+      {selected.size > 0 ? (
+        <div className={styles.bulkBar} role="toolbar" aria-label={strings.View_List_BulkBarAriaLabel}>
+          <span className={styles.bulkCount} role="status">{formatString(strings.View_List_BulkSelectedCount, { count: selected.size })}</span>
+          <select
+            className={styles.bulkControl}
+            value=""
+            aria-label={strings.View_List_BulkStatusPlaceholder}
+            onChange={e => { if (e.target.value) bulkSetStatus(e.target.value as TaskStatus); }}
+          >
+            <option value="">{strings.View_List_BulkStatusPlaceholder}</option>
+            {TASK_STATUS_OPTIONS.map(s => <option key={s} value={s}>{getStatusLabel(s)}</option>)}
+          </select>
+          <select
+            className={styles.bulkControl}
+            value=""
+            aria-label={strings.View_List_BulkPriorityPlaceholder}
+            onChange={e => { if (e.target.value) bulkSetPriority(e.target.value as TaskPriority); }}
+          >
+            <option value="">{strings.View_List_BulkPriorityPlaceholder}</option>
+            {TASK_PRIORITY_OPTIONS.map(p => <option key={p} value={p}>{getPriorityLabel(p)}</option>)}
+          </select>
+          <input
+            className={styles.bulkControl}
+            style={{ width: 130 }}
+            value={bulkAssignee}
+            placeholder={strings.View_List_BulkAssigneePlaceholder}
+            aria-label={strings.View_List_BulkAssigneePlaceholder}
+            onChange={e => setBulkAssignee(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && bulkAssignee.trim()) { e.preventDefault(); bulkSetAssignee(); } }}
+          />
+          <button className={styles.toolbarBtn} disabled={!bulkAssignee.trim()} onClick={bulkSetAssignee}>
+            {strings.View_List_BulkAssignApply}
+          </button>
+          <input
+            className={styles.bulkControl}
+            style={{ width: 80 }}
+            type="number"
+            min={0}
+            max={100}
+            value={bulkPercent}
+            placeholder={strings.View_List_BulkPercentPlaceholder}
+            aria-label={strings.View_List_BulkPercentPlaceholder}
+            onChange={e => setBulkPercent(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); bulkSetPercent(); } }}
+          />
+          <button className={styles.toolbarBtn} disabled={bulkPercent === '' || isNaN(parseInt(bulkPercent, 10))} onClick={bulkSetPercent}>
+            {strings.View_List_BulkPercentApply}
+          </button>
+          {onBulkDelete && (
+            <button
+              className={`${styles.toolbarBtn} ${styles.danger}`}
+              onClick={() => { onBulkDelete(Array.from(selected)); setSelected(new Set()); }}
+            >
+              {strings.View_List_BulkDelete}
+            </button>
+          )}
+          <button className={styles.toolbarBtn} onClick={() => setSelected(new Set())}>
+            {strings.View_List_BulkClear}
+          </button>
+        </div>
+      ) : (
+        <div className={styles.listToolbar}>
+          <button className={styles.toolbarBtn} onClick={() => exportTasksCsv(project, tasks)}>
+            {strings.View_List_ExportCsv}
+          </button>
+        </div>
+      )}
       <div className={styles.tableWrapper}>
         <table>
           <thead className={styles.thead}>
             <tr>
+              <th className={styles.checkCol} style={{ width: 36, cursor: 'default' }}>
+                <input
+                  ref={selectAllRef}
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleAll}
+                  aria-label={strings.View_List_SelectAllAriaLabel}
+                />
+              </th>
               <SortTh field="title" label={strings.ListView_ColTaskName} sortField={sortField} sortDir={sortDir} onSort={handleSort} />
               <SortTh field="status" label={strings.ListView_ColStatus} width={130} sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-              {showHealthBadges && <th style={{ width: 100 }}>{strings.ListView_ColHealth}</th>}
+              {showHealthBadges && <SortTh field="health" label={strings.ListView_ColHealth} width={100} sortField={sortField} sortDir={sortDir} onSort={handleSort} />}
               <SortTh field="priority" label={strings.ListView_ColPriority} width={100} sortField={sortField} sortDir={sortDir} onSort={handleSort} />
               <SortTh field="startDate" label={strings.ListView_ColStart} width={110} sortField={sortField} sortDir={sortDir} onSort={handleSort} />
               <SortTh field="dueDate" label={strings.ListView_ColDue} width={110} sortField={sortField} sortDir={sortDir} onSort={handleSort} />
@@ -206,7 +383,7 @@ export const ListView: React.FC<IListViewProps> = ({
               if (row.type === 'phase') {
                 return (
                   <tr key={`phase-${row.phase}`} className={styles.phaseGroupRow}>
-                    <td colSpan={showHealthBadges ? 11 : 10}>
+                    <td colSpan={showHealthBadges ? 12 : 11}>
                       <span className={styles.phaseGroupCell}>▸ {row.phase}</span>
                     </td>
                   </tr>
@@ -218,7 +395,17 @@ export const ListView: React.FC<IListViewProps> = ({
               const overdue = isOverdue(task);
 
               return (
-                <tr key={`task-${task.id}`}>
+                <tr key={`task-${task.id}`} className={selected.has(task.id) ? styles.selectedRow : ''}>
+                  {/* Select */}
+                  <td className={styles.checkCol}>
+                    <input
+                      type="checkbox"
+                      checked={selected.has(task.id)}
+                      onChange={() => toggleSelected(task.id)}
+                      aria-label={formatString(strings.View_List_SelectRowAriaLabel, { taskTitle: task.title })}
+                    />
+                  </td>
+
                   {/* Task name */}
                   <td>
                     <div className={styles.taskNameCell}>
@@ -304,12 +491,20 @@ export const ListView: React.FC<IListViewProps> = ({
 
                   {/* Start */}
                   <td>
-                    <span className={styles.dateCell}>{formatDateOnly(task.startDate, 'MMM d, yyyy')}</span>
+                    <span
+                      className={`${styles.dateCell} ${isNonWorking(task.startDate) ? styles.nonWorking : ''}`}
+                      title={isNonWorking(task.startDate) ? strings.View_List_NonWorkingDay : undefined}
+                    >
+                      {formatDateOnly(task.startDate, 'MMM d, yyyy')}
+                    </span>
                   </td>
 
                   {/* Due */}
                   <td>
-                    <span className={`${styles.dateCell} ${overdue ? styles.overdue : ''}`}>
+                    <span
+                      className={`${styles.dateCell} ${overdue ? styles.overdue : ''} ${isNonWorking(task.dueDate) ? styles.nonWorking : ''}`}
+                      title={isNonWorking(task.dueDate) ? strings.View_List_NonWorkingDay : undefined}
+                    >
                       {formatDateOnly(task.dueDate, 'MMM d, yyyy')}
                       {overdue && ' ⚠'}
                     </span>
@@ -329,7 +524,7 @@ export const ListView: React.FC<IListViewProps> = ({
                         <span style={{ fontSize: 12 }}>{task.assignedTo.split(' ')[0]}</span>
                       </div>
                     ) : (
-                      <span style={{ color: '#C8C6C4', fontSize: 12 }}>{strings.ListView_Unassigned}</span>
+                      <span style={{ color: 'var(--neutralQuaternary, #C8C6C4)', fontSize: 12 }}>{strings.ListView_Unassigned}</span>
                     )}
                   </td>
 
@@ -351,14 +546,14 @@ export const ListView: React.FC<IListViewProps> = ({
 
                   {/* Phase */}
                   <td>
-                    <span style={{ fontSize: 12, color: '#605E5C' }}>
+                    <span style={{ fontSize: 12, color: 'var(--neutralSecondary, #605E5C)' }}>
                       {task.phase || '—'}
                     </span>
                   </td>
 
                   {/* Predecessors */}
                   <td style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    <span style={{ fontSize: 12, color: '#605E5C' }} title={task.dependencies.map(id => taskById.get(id)?.title ?? `#${id}`).join(', ')}>
+                    <span style={{ fontSize: 12, color: 'var(--neutralSecondary, #605E5C)' }} title={task.dependencies.map(id => taskById.get(id)?.title ?? `#${id}`).join(', ')}>
                       {task.dependencies.length > 0
                         ? task.dependencies.map(id => taskById.get(id)?.title ?? `#${id}`).join(', ')
                         : '—'}

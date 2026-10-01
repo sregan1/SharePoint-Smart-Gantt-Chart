@@ -41,7 +41,35 @@ export interface ITask {
   modified: string;
   /** SharePoint concurrency token from the last read — see IProject.etag. */
   etag?: string;
+  /** Per-predecessor link type and lag. Keys are predecessor ids that also
+   *  appear in `dependencies`; a missing key means finish-to-start, lag 0.
+   *  Stored in the Dependencies column as "12,15SS+2,18FF-1". */
+  dependencyLinks?: Record<number, IDependencyLink>;
+  /** Planned (baseline) dates, ISO yyyy-MM-dd, captured on demand. */
+  baselineStart?: string;
+  baselineDue?: string;
 }
+
+export type DependencyType = 'FS' | 'SS' | 'FF' | 'SF';
+
+export interface IDependencyLink {
+  type: DependencyType;
+  /** Lag (positive) or lead (negative) in working days. */
+  lag: number;
+}
+
+/** Project working calendar, supplied by web part properties. */
+export interface IWorkingCalendar {
+  /** Working weekdays, 0 = Sunday … 6 = Saturday. */
+  workingDays: number[];
+  /** Non-working dates, ISO yyyy-MM-dd. */
+  holidays: string[];
+}
+
+export const DEFAULT_WORKING_CALENDAR: IWorkingCalendar = {
+  workingDays: [1, 2, 3, 4, 5],
+  holidays: [],
+};
 
 export type TaskStatus = 'Not Started' | 'In Progress' | 'Completed' | 'On Hold' | 'Cancelled';
 export type TaskPriority = 'Critical' | 'High' | 'Medium' | 'Low';

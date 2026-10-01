@@ -1,8 +1,10 @@
 import * as XLSX from 'xlsx';
 import { WebPartContext } from '@microsoft/sp-webpart-base';
-import { ITask, TaskStatus, TaskPriority, TASK_STATUS_OPTIONS, TASK_PRIORITY_OPTIONS } from '../models';
+import { ITask, IDependencyLink, TaskStatus, TaskPriority, TASK_STATUS_OPTIONS, TASK_PRIORITY_OPTIONS } from '../models';
 import { SharePointService } from './SharePointService';
 import { toDateOnly } from '../utils/dateUtils';
+import { parseDependencyToken, splitNamedLink } from '../utils/dependencyUtils';
+import { withRetry, runLimited } from '../utils/retryUtils';
 import * as strings from 'SmartGanttWebPartStrings';
 import { formatString } from '../components/localeUtils';
 
@@ -49,6 +51,18 @@ export interface IImportSource {
   rows: Record<string, string>[];
   autoMapping: ColumnMapping;
   needsMapping: boolean;
+  /** Day/month order detected in the file's date columns under `autoMapping`
+   *  (see detectDateOrder); lets the UI preselect its date-order picker. */
+  detectedDateOrder?: ResolvedDateOrder;
+}
+
+/** How ambiguous numeric dates such as 03/04/2026 are read. 'auto' detects from the data. */
+export type DateOrder = 'auto' | 'mdy' | 'dmy';
+export type ResolvedDateOrder = 'mdy' | 'dmy';
+
+export interface IApplyMappingOptions {
+  /** Default 'auto': see detectDateOrder. */
+  dateOrder?: DateOrder;
 }
 
 export interface IPlannerPlan {
@@ -124,7 +138,51 @@ function ymd(y: number, m1: number, d: number): string {
   return `${y}-${String(m1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 
-function parseExcelDate(value: string | number | null | undefined): string {
+// Day/month order of the machine's locale, for files whose dates are all
+// ambiguous (every value has both parts <= 12).
+function localeDateOrder(): ResolvedDateOrder {
+  try {
+    const locale = typeof navigator !== 'undefined' ? navigator.language : undefined;
+    const sample = new Date(2001, 10, 25).toLocaleDateString(locale); // 25 Nov 2001
+    const dayAt = sample.indexOf('25');
+    const monthAt = sample.indexOf('11');
+    if (dayAt !== -1 && monthAt !== -1) return dayAt < monthAt ? 'dmy' : 'mdy';
+  } catch { /* fall through */ }
+  return 'mdy';
+}
+
+const NUMERIC_DATE_RE = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/;
+
+/**
+ * Decide how a file's numeric dates (d/m/yyyy, m/d/yyyy, with / . or - as the
+ * separator) are ordered by looking at the WHOLE column set: any first part
+ * > 12 means day-first, any second part > 12 means month-first, otherwise the
+ * browser locale decides. Checks every column mapped to startDate/dueDate.
+ */
+export function detectDateOrder(rows: Record<string, string>[], mapping: ColumnMapping): ResolvedDateOrder {
+  const cols = Object.keys(mapping).filter(k => mapping[k] === 'startDate' || mapping[k] === 'dueDate');
+  let firstOver12 = false;
+  let secondOver12 = false;
+  rows.forEach(r => cols.forEach(c => {
+    const m = NUMERIC_DATE_RE.exec(String(r[c] ?? '').trim());
+    if (!m) return;
+    if (+m[1] > 12) firstOver12 = true;
+    if (+m[2] > 12) secondOver12 = true;
+  }));
+  if (firstOver12 && !secondOver12) return 'dmy';
+  if (secondOver12 && !firstOver12) return 'mdy';
+  return localeDateOrder();
+}
+
+// Build 'YYYY-MM-DD' from calendar parts, rejecting impossible dates (month 13,
+// Feb 30) instead of letting Date roll them into a different day.
+function validYmd(y: number, m1: number, d: number): string {
+  const probe = new Date(y, m1 - 1, d);
+  if (probe.getFullYear() !== y || probe.getMonth() !== m1 - 1 || probe.getDate() !== d) return '';
+  return ymd(y, m1, d);
+}
+
+function parseExcelDate(value: string | number | null | undefined, order: ResolvedDateOrder): string {
   if (!value && value !== 0) return '';
 
   if (typeof value === 'number') {
@@ -153,17 +211,19 @@ function parseExcelDate(value: string | number | null | undefined): string {
     }
   }
 
-  // MM/DD/YYYY or M/D/YYYY — interpret as a calendar day directly
-  const mdy = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (mdy) return ymd(+mdy[3], +mdy[1], +mdy[2]);
+  // d/m/yyyy or m/d/yyyy (also . and - separators): one order for the whole file.
+  const num = NUMERIC_DATE_RE.exec(str);
+  if (num) {
+    const a = +num[1];
+    const b = +num[2];
+    return order === 'dmy' ? validYmd(+num[3], b, a) : validYmd(+num[3], a, b);
+  }
 
-  // DD-MM-YYYY (dash-separated, day-first)
-  const dmy = str.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
-  if (dmy) return ymd(+dmy[3], +dmy[2], +dmy[1]);
-
-  // Fallback
+  // Fallback (e.g. "Jan 5, 2026"): the engine parses these in LOCAL time, so
+  // read the local calendar parts. Going through toISOString() would convert
+  // to UTC and land a day early in zones ahead of UTC (e.g. UTC+13/+14).
   const d = new Date(str);
-  return isNaN(d.getTime()) ? '' : toDateOnly(d.toISOString());
+  return isNaN(d.getTime()) ? '' : ymd(d.getFullYear(), d.getMonth() + 1, d.getDate());
 }
 
 function normalizeStatus(raw: string): TaskStatus {
@@ -244,6 +304,7 @@ export async function parseExcelFile(file: File): Promise<IImportSource> {
           rows,
           autoMapping,
           needsMapping: mappingNeedsReview(autoMapping),
+          detectedDateOrder: detectDateOrder(rows, autoMapping),
         });
       } catch (e) {
         const detail = e instanceof Error ? e.message : '';
@@ -259,8 +320,13 @@ export async function parseExcelFile(file: File): Promise<IImportSource> {
 
 export function applyMapping(
   rows: Record<string, string>[],
-  mapping: ColumnMapping
+  mapping: ColumnMapping,
+  options: IApplyMappingOptions = {}
 ): Partial<ITask>[] {
+  const order: ResolvedDateOrder = options.dateOrder === 'mdy' || options.dateOrder === 'dmy'
+    ? options.dateOrder
+    : detectDateOrder(rows, mapping);
+
   // A percent-formatted Excel cell ("50%") arrives via raw:true as the bare
   // fraction 0.5 with no literal '%' sign. Detect that once for the whole
   // mapped column (rather than per cell, where 0.5 could mean "half a
@@ -287,8 +353,8 @@ export function applyMapping(
         const raw = row[col] ?? '';
         switch (field) {
           case 'title': task.title = raw; break;
-          case 'startDate': task.startDate = parseExcelDate(raw); break;
-          case 'dueDate': task.dueDate = parseExcelDate(raw); break;
+          case 'startDate': task.startDate = parseExcelDate(raw, order); break;
+          case 'dueDate': task.dueDate = parseExcelDate(raw, order); break;
           case 'status': task.status = raw ? normalizeStatus2(raw) : undefined; break;
           case 'priority': task.priority = raw ? normalizePriority(raw) : undefined; break;
           case 'assignedTo': task.assignedTo = raw; break;
@@ -326,6 +392,8 @@ interface IGraphRequest {
   get(): Promise<{ value: any[] } | any>;
 }
 
+const GRAPH_CONCURRENCY = 4;
+
 async function getGraphClient(context: WebPartContext): Promise<IGraphClient> {
   return (context as any).msGraphClientFactory.getClient('3') as IGraphClient;
 }
@@ -333,13 +401,15 @@ async function getGraphClient(context: WebPartContext): Promise<IGraphClient> {
 // Graph pages results regardless of $top (e.g. Planner tasks page at ~400
 // per response); follow @odata.nextLink until exhausted so large collections
 // aren't silently truncated.
-async function fetchAllPages(client: IGraphClient, first: Promise<{ value?: any[]; '@odata.nextLink'?: string }>): Promise<any[]> {
+// `first` is a thunk so every page request can be retried with backoff.
+async function fetchAllPages(client: IGraphClient, first: () => Promise<{ value?: any[]; '@odata.nextLink'?: string }>): Promise<any[]> {
   const results: any[] = [];
-  let resp = await first;
+  let resp = await withRetry(first);
   results.push(...(resp.value || []));
   let nextLink = resp['@odata.nextLink'];
   while (nextLink) {
-    resp = await client.api(nextLink).get();
+    const link = nextLink;
+    resp = await withRetry(() => client.api(link).get());
     results.push(...(resp.value || []));
     nextLink = resp['@odata.nextLink'];
   }
@@ -354,7 +424,7 @@ export async function fetchPlannerPlans(context: WebPartContext): Promise<IPlann
   try {
     groups = await fetchAllPages(
       graph,
-      graph.api('/me/memberOf/microsoft.graph.group').select('id,displayName,groupTypes').top(50).get()
+      () => graph.api('/me/memberOf/microsoft.graph.group').select('id,displayName,groupTypes').top(50).get()
     );
   } catch {
     return [];
@@ -366,10 +436,14 @@ export async function fetchPlannerPlans(context: WebPartContext): Promise<IPlann
   );
 
   const plans: IPlannerPlan[] = [];
-  await Promise.all(
-    m365Groups.map(async (group: any) => {
+  // A user can belong to dozens of groups; hitting Graph for all of them at
+  // once trips throttling, so run a few at a time (withRetry handles 429/503).
+  await runLimited(
+    m365Groups,
+    GRAPH_CONCURRENCY,
+    async (group: any) => {
       try {
-        const resp = await graph.api(`/groups/${group.id}/planner/plans`).get();
+        const resp = await withRetry(() => graph.api(`/groups/${group.id}/planner/plans`).get());
         const groupPlans: any[] = resp.value || [];
         groupPlans.forEach(p => {
           plans.push({
@@ -382,7 +456,7 @@ export async function fetchPlannerPlans(context: WebPartContext): Promise<IPlann
       } catch {
         // Group may not have Planner — skip silently
       }
-    })
+    }
   );
 
   return plans.sort((a, b) => a.title.localeCompare(b.title));
@@ -397,8 +471,8 @@ export async function fetchPlannerTasks(
 
   // Fetch tasks and buckets in parallel, paging both to completion.
   const [plannerTasks, buckets] = await Promise.all([
-    fetchAllPages(graph, graph.api(`/planner/plans/${planId}/tasks`).top(500).get()),
-    fetchAllPages(graph, graph.api(`/planner/plans/${planId}/buckets`).get()),
+    fetchAllPages(graph, () => graph.api(`/planner/plans/${planId}/tasks`).top(500).get()),
+    fetchAllPages(graph, () => graph.api(`/planner/plans/${planId}/buckets`).get()),
   ]);
 
   const bucketMap = new Map<string, string>(buckets.map((b: any) => [b.id, b.name]));
@@ -410,15 +484,17 @@ export async function fetchPlannerTasks(
   });
 
   const userMap = new Map<string, { name: string; email: string }>();
-  await Promise.all(
-    Array.from(userIds).map(async uid => {
+  await runLimited(
+    Array.from(userIds),
+    GRAPH_CONCURRENCY,
+    async uid => {
       try {
-        const user = await graph.api(`/users/${uid}`).select('displayName,mail').get();
+        const user = await withRetry(() => graph.api(`/users/${uid}`).select('displayName,mail').get());
         userMap.set(uid, { name: user.displayName || '', email: user.mail || '' });
       } catch {
         userMap.set(uid, { name: uid, email: '' });
       }
-    })
+    }
   );
 
   // Planner priority scale: 1 = Urgent, 3 = Important, 5 = Medium, 9 = Low.
@@ -459,6 +535,7 @@ export async function fetchPlannerTasks(
     rows,
     autoMapping,
     needsMapping: false, // Planner fields are always well-known
+    detectedDateOrder: 'mdy', // Planner dates are already ISO; never ambiguous
   };
 }
 
@@ -466,11 +543,22 @@ export async function fetchPlannerTasks(
 
 // The same title-based filter applyMapping() uses to drop blank rows, exposed
 // so callers can keep a raw-row array in lockstep with the filtered task
-// array (needed to resolve dependencies positionally — see resolveDependencies).
+// array (needed to resolve dependencies — see resolveDependencies).
+//
+// Each returned row is a copy carrying its ORIGINAL 1-based data-row number
+// (blank-title rows still count) under SOURCE_ROW_KEY, so "row number"
+// dependencies (MS Project IDs) still point at the right task after blank rows
+// were filtered out.
+export const SOURCE_ROW_KEY = '__sourceRow';
+
 export function filterMappedRows(rows: Record<string, string>[], mapping: ColumnMapping): Record<string, string>[] {
   const titleCol = Object.keys(mapping).find(k => mapping[k] === 'title');
   if (!titleCol) return [];
-  return rows.filter(r => !!(r[titleCol] ?? '').trim());
+  const kept: Record<string, string>[] = [];
+  rows.forEach((r, i) => {
+    if ((r[titleCol] ?? '').trim()) kept.push({ ...r, [SOURCE_ROW_KEY]: String(i + 1) });
+  });
+  return kept;
 }
 
 // ─── Batch import ─────────────────────────────────────────────────────────────
@@ -519,16 +607,19 @@ export async function batchImport(
 // ─── Post-import dependency resolution ───────────────────────────────────────
 //
 // Dependencies stored in Excel as task names (e.g. "Design Review, UX Wireframes")
-// or MS Project-style row numbers can't be converted to SharePoint IDs at mapping
-// time because the IDs don't exist yet. Call this after batchImport() with the
-// same (filtered, aligned) rows and the createdIds it returned, to do a second
-// pass wiring up each task's Dependencies field.
+// or MS Project-style row numbers with link types and lag ("3", "5SS+2d",
+// "7FF-1d") can't be converted to SharePoint IDs at mapping time because the
+// IDs don't exist yet. Call this after batchImport() with the same (filtered,
+// aligned) rows and the createdIds it returned, to do a second pass wiring up
+// each task's Dependencies field.
 //
 // `rows` MUST be the array returned by filterMappedRows() for the same mapping
 // used to build the tasks passed to batchImport() — its order must match
-// createdIds exactly, since "row number" dependencies and title lookups are
-// both resolved positionally against createdIds rather than by re-fetching
-// and re-matching titles from SharePoint (which breaks on duplicate titles).
+// createdIds exactly. Numeric predecessors are matched by the ORIGINAL
+// spreadsheet row number (recorded by filterMappedRows), and titles against the
+// created tasks, rather than by re-fetching and re-matching titles from
+// SharePoint (which breaks on duplicate titles). Anything that can't be
+// resolved is reported in `warnings` instead of being silently dropped.
 
 export async function resolveDependencies(
   spService: SharePointService,
@@ -542,12 +633,14 @@ export async function resolveDependencies(
   const titleCol = Object.keys(mapping).find(k => mapping[k] === 'title');
   if (!depCol || !titleCol) return { resolved: 0, warnings };
 
-  // 1-based row-number → SP id, so MS Project-style numeric predecessor
-  // columns ("3", "5") resolve to the task actually created for that row.
+  // Original 1-based spreadsheet row → SP id. Falls back to position for rows
+  // that did not come from filterMappedRows (no SOURCE_ROW_KEY).
   const rowToId = new Map<number, number>();
-  rows.forEach((_row, idx) => {
+  rows.forEach((row, idx) => {
     const id = createdIds[idx];
-    if (id !== null && id !== undefined) rowToId.set(idx + 1, id);
+    if (id === null || id === undefined) return;
+    const src = parseInt(row[SOURCE_ROW_KEY] ?? '', 10);
+    rowToId.set(!isNaN(src) && src > 0 ? src : idx + 1, id);
   });
 
   // Case-insensitive title → SP id, tracking titles that appear more than
@@ -567,64 +660,89 @@ export async function resolveDependencies(
     }
   });
 
-  const updates: Array<{ taskId: number; deps: number[] }> = [];
+  const updates: Array<{ taskId: number; deps: number[]; links: Record<number, IDependencyLink> }> = [];
 
   rows.forEach((row, idx) => {
     const taskId = createdIds[idx];
     const rawDeps = (row[depCol] ?? '').trim();
     if (taskId === null || taskId === undefined || !rawDeps) return;
 
+    const rowLabel = row[SOURCE_ROW_KEY] || String(idx + 1);
+    const taskTitle = (row[titleCol] ?? '').trim();
     const depIds: number[] = [];
-    rawDeps.split(',').forEach(part => {
+    const links: Record<number, IDependencyLink> = {};
+    const unresolved = (name: string): void => {
+      warnings.push(formatString(strings.Svc_UnresolvedDependency, { row: rowLabel, title: taskTitle, name }));
+    };
+    const add = (id: number, link: IDependencyLink, name: string): void => {
+      if (id === taskId) {
+        warnings.push(formatString(strings.Svc_SelfDependency, { row: rowLabel, title: taskTitle, name }));
+        return;
+      }
+      if (depIds.indexOf(id) !== -1) return;
+      depIds.push(id);
+      if (link.type !== 'FS' || link.lag) links[id] = link;
+    };
+
+    rawDeps.split(/[,;]/).forEach(part => {
       const name = part.trim();
       if (!name) return;
 
-      // Pure integer → treat as 1-based row number (MS Project style)
-      const rowNum = parseInt(name, 10);
-      if (!isNaN(rowNum) && String(rowNum) === name && rowNum > 0) {
-        const id = rowToId.get(rowNum);
-        if (id !== undefined) depIds.push(id);
-        return;
-      }
-
-      // Otherwise match by task title (case-insensitive)
-      const key = name.toLowerCase();
-      if (ambiguousTitles.has(key)) {
+      // Exact task title wins (a title may itself look like "3" or "A-1").
+      const exactKey = name.toLowerCase();
+      if (ambiguousTitles.has(exactKey)) {
         warnings.push(formatString(strings.ImportService_AmbiguousDependency, { name }));
         return;
       }
-      const id = titleToId.get(key);
-      if (id !== undefined) depIds.push(id);
+      const exact = titleToId.get(exactKey);
+      if (exact !== undefined) { add(exact, { type: 'FS', lag: 0 }, name); return; }
+
+      // MS Project style: row number with optional type and lag ("3", "3FS+2d").
+      const numeric = parseDependencyToken(name);
+      if (numeric) {
+        const id = rowToId.get(numeric.id);
+        if (id !== undefined) add(id, numeric.link, name); else unresolved(name);
+        return;
+      }
+
+      // "<task title> FS+2d": a title followed by a type and/or lag.
+      const named = splitNamedLink(name);
+      if (named) {
+        const key = named.name.toLowerCase();
+        if (ambiguousTitles.has(key)) {
+          warnings.push(formatString(strings.ImportService_AmbiguousDependency, { name: named.name }));
+          return;
+        }
+        const id = titleToId.get(key);
+        if (id !== undefined) { add(id, named.link, name); return; }
+      }
+
+      unresolved(name);
     });
 
-    if (depIds.length > 0) updates.push({ taskId, deps: depIds });
+    if (depIds.length > 0) updates.push({ taskId, deps: depIds, links });
   });
 
   if (updates.length === 0) return { resolved: 0, warnings };
 
   // Promise.allSettled isn't available at this project's target lib — a
   // per-item catch gives the same "don't let one failure abort the batch"
-  // behavior without it.
+  // behavior without it. updateTask retries throttling itself.
   interface IUpdateOutcome { error: string | null; }
-  const CHUNK_SIZE = 10;
+  const results = await runLimited(updates, GRAPH_CONCURRENCY, ({ taskId, deps, links }): Promise<IUpdateOutcome> =>
+    spService.updateTask(listName, taskId, { dependencies: deps, dependencyLinks: links })
+      .then((): IUpdateOutcome => ({ error: null }))
+      .catch((e: unknown): IUpdateOutcome => ({ error: e instanceof Error ? e.message : String(e) }))
+  );
+
   let resolved = 0;
-  for (let start = 0; start < updates.length; start += CHUNK_SIZE) {
-    const chunk = updates.slice(start, start + CHUNK_SIZE);
-    const results: IUpdateOutcome[] = await Promise.all(
-      chunk.map(({ taskId, deps }): Promise<IUpdateOutcome> =>
-        spService.updateTask(listName, taskId, { dependencies: deps })
-          .then((): IUpdateOutcome => ({ error: null }))
-          .catch((e: unknown): IUpdateOutcome => ({ error: e instanceof Error ? e.message : String(e) }))
-      )
-    );
-    results.forEach((r, i) => {
-      if (r.error === null) {
-        resolved++;
-      } else {
-        warnings.push(formatString(strings.ImportService_LinkDependencyError, { taskId: chunk[i].taskId, error: r.error }));
-      }
-    });
-  }
+  results.forEach((r, i) => {
+    if (r.error === null) {
+      resolved++;
+    } else {
+      warnings.push(formatString(strings.ImportService_LinkDependencyError, { taskId: updates[i].taskId, error: r.error }));
+    }
+  });
 
   return { resolved, warnings };
 }

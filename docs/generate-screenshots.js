@@ -45,16 +45,17 @@ const TASKS = [
   { id:1, phase:'Discovery', title:'Requirements Gathering', status:'Completed',   pct:100, assignee:'Sarah M.', start:'2026-05-15', end:'2026-05-27', priority:'High'   },
   { id:2, phase:'Discovery', title:'Stakeholder Interviews',  status:'Completed',   pct:100, assignee:'John S.',  start:'2026-05-18', end:'2026-05-29', priority:'Medium' },
   { id:3, phase:'Discovery', title:'Current State Analysis',  status:'In Progress', pct:75,  assignee:'Sarah M.', start:'2026-05-28', end:'2026-06-06', priority:'High'   },
-  { id:4, phase:'Design',    title:'UX Wireframes',           status:'In Progress', pct:40,  assignee:'Amy K.',   start:'2026-06-03', end:'2026-06-17', priority:'Medium', deps:[1,2] },
-  { id:5, phase:'Design',    title:'Visual Design',           status:'Not Started', pct:0,   assignee:'Amy K.',   start:'2026-06-10', end:'2026-06-24', priority:'Medium' },
+  { id:4, phase:'Design',    title:'UX Wireframes',           status:'In Progress', pct:40,  assignee:'Amy K.',   start:'2026-06-03', end:'2026-06-17', priority:'Medium', deps:[1,2], baseline:['2026-06-01','2026-06-12'] },
+  { id:5, phase:'Design',    title:'Visual Design',           status:'Not Started', pct:0,   assignee:'Amy K.',   start:'2026-06-10', end:'2026-06-24', priority:'Medium', baseline:['2026-06-10','2026-06-24'] },
   { id:6, phase:'Design',    title:'Design Review',           status:'Not Started', pct:0,   assignee:'',         start:'2026-06-27', end:'2026-06-27', milestone:true,   priority:'High',   deps:[5] },
-  { id:7, phase:'Development', title:'Frontend Build',        status:'Not Started', pct:0,   assignee:'Mike R.',  start:'2026-06-26', end:'2026-07-17', priority:'Medium' },
+  { id:7, phase:'Development', title:'Frontend Build',        status:'Not Started', pct:0,   assignee:'Mike R.',  start:'2026-06-26', end:'2026-07-17', priority:'Medium', critical:true, baseline:['2026-06-24','2026-07-10'] },
   { id:8, phase:'Development', title:'API Integration',       status:'Not Started', pct:0,   assignee:'Dave C.',  start:'2026-07-08', end:'2026-07-23', priority:'High'   },
-  { id:9, phase:'Development', title:'QA Testing',            status:'Not Started', pct:0,   assignee:'Sarah M.', start:'2026-07-21', end:'2026-08-04', priority:'Medium', deps:[7,8] },
-  { id:10, phase:'Development', title:'Go Live',              status:'Not Started', pct:0,   assignee:'',         start:'2026-08-07', end:'2026-08-07', milestone:true,   priority:'Critical', deps:[9] },
+  { id:9, phase:'Development', title:'QA Testing',            status:'Not Started', pct:0,   assignee:'Sarah M.', start:'2026-07-21', end:'2026-08-04', priority:'Medium', deps:[7,8], links:{ 8:{type:'SS',lag:2} }, critical:true },
+  { id:10, phase:'Development', title:'Go Live',              status:'Not Started', pct:0,   assignee:'',         start:'2026-08-07', end:'2026-08-07', milestone:true,   priority:'Critical', deps:[9], critical:true },
 ];
 
 // ── Colors ─────────────────────────────────────────────────────────────────
+const LINK_LABEL = l => (!l || l.type==='FS' && !l.lag) ? '' : `${l.type}${l.lag>0?'+':l.lag<0?'-':''}${l.lag?Math.abs(l.lag):''}`;
 const STATUS_COLOR = {
   'Not Started': '#8B929A', 'In Progress': '#0078D4',
   'Completed': '#107C10',   'On Hold': '#CA5010', 'Cancelled': '#D13438',
@@ -131,7 +132,7 @@ function ganttSVG() {
       bars.push(
         `<rect x="0" y="${y0}" width="${LW}" height="${RH}" fill="#F3F2F1"/>`,
         `<rect x="${LW}" y="${y0}" width="${TW}" height="${RH}" fill="#F8F7F6"/>`,
-        `<text x="14" y="${y0+RH/2+4}" font-size="11" font-weight="700" fill="#605E5C" font-family="Segoe UI,sans-serif" letter-spacing="0.5">${row.phase.toUpperCase()}</text>`,
+        `<text x="14" y="${y0+RH/2+4}" font-size="11" font-weight="700" fill="#605E5C" font-family="Segoe UI,sans-serif" letter-spacing="0.5">▼ ${row.phase.toUpperCase()}</text>`,
       );
       return;
     }
@@ -156,10 +157,16 @@ function ganttSVG() {
       bars.push(
         `<rect x="${bx}" y="${by}" width="${bw}" height="${BH}" rx="4" fill="${sc}28"/>`,
         pw>0 ? `<rect x="${bx}" y="${by}" width="${pw}" height="${BH}" rx="4" fill="${sc}"/>` : '',
+        t.critical ? `<rect x="${bx}" y="${by}" width="${bw}" height="${BH}" rx="4" fill="none" stroke="#D13438" stroke-width="1.5" stroke-dasharray="4,2"/>` : '',
       );
       if (t.pct > 0 && bw > 40) bars.push(
         `<text x="${bx+6}" y="${by+BH/2+4}" font-size="10" font-weight="700" fill="${pw>bw*.45?'#fff':sc}" font-family="Segoe UI,sans-serif">${t.pct}%</text>`
       );
+    }
+    if (t.baseline) {
+      const bs = new Date(t.baseline[0]), be = new Date(t.baseline[1]);
+      const slipped = e > be;
+      bars.push(`<rect x="${LW+days(bs)*D}" y="${y0+(RH-BH)/2+BH+1}" width="${(days(be)-days(bs)+1)*D}" height="3" rx="1.5" fill="${slipped?'#D13438':'#A19F9D'}" opacity="0.85"/>`);
     }
     bars.push(`<line x1="${LW}" y1="${y0+RH}" x2="${LW+TW}" y2="${y0+RH}" stroke="#F3F2F1" stroke-width="1"/>`);
   });
@@ -190,8 +197,21 @@ function ganttSVG() {
       const fromY = TH + HH + depRowIdx * RH + RH / 2;
       const routePad = Math.max(D * 0.6, 10);
 
+      const link = (task.links && task.links[depId]) || { type:'FS', lag:0 };
+      const isCrit = !!(task.critical && dep.critical);
+      let labelX = toX, labelAnchor = 'end';
       let pathD;
-      if (dep.milestone) {
+      if (link.type !== 'FS') {
+        const fromSide = link.type === 'FF' ? 'end' : link.type === 'SF' ? 'start' : 'start';
+        const toSide = link.type === 'SS' ? 'start' : 'end';
+        const fdir = fromSide === 'end' ? 1 : -1, tdir = toSide === 'start' ? -1 : 1;
+        const fx2 = LW + (fromSide === 'end' ? days(new Date(dep.end)) + 1 : days(new Date(dep.start))) * D;
+        const ax2 = LW + (toSide === 'start' ? days(new Date(task.start)) : days(new Date(task.end)) + 1) * D + tdir * 2;
+        const p1 = fx2 + fdir * routePad, q1 = ax2 + tdir * routePad;
+        const midY = toY >= fromY ? fromY + RH * 0.5 : fromY - RH * 0.5;
+        pathD = `M ${fx2} ${fromY} H ${p1} V ${midY} H ${q1} V ${toY} H ${ax2}`;
+        labelX = ax2 + tdir * 4; labelAnchor = tdir === -1 ? 'end' : 'start';
+      } else if (dep.milestone) {
         const mx = LW + days(new Date(dep.start)) * D + D / 2;
         const myBottom = fromY + MS;
         if (toX > mx) {
@@ -210,7 +230,8 @@ function ganttSVG() {
           pathD = `M ${fromX} ${fromY} H ${fromX + routePad} V ${overshoot} H ${toX - routePad} V ${toY} H ${toX}`;
         }
       }
-      arrowPaths.push(`<path d="${pathD}" stroke="#8A8886" stroke-width="1.5" fill="none" marker-end="url(#dep-arrow)"/>`);
+      arrowPaths.push(`<path d="${pathD}" stroke="${isCrit?'#D13438':'#8A8886'}" stroke-width="${isCrit?2:1.5}" fill="none" marker-end="url(#${isCrit?'dep-arrow-crit':'dep-arrow'})"/>`);
+      if (LINK_LABEL(link)) arrowPaths.push(`<text x="${labelX}" y="${toY-4}" text-anchor="${labelAnchor}" font-size="9" fill="${isCrit?'#D13438':'#605E5C'}" font-family="Segoe UI,sans-serif">${LINK_LABEL(link)}</text>`);
     });
   });
 
@@ -221,17 +242,21 @@ function ganttSVG() {
     <marker id="dep-arrow" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
       <polygon points="0 0, 7 2.5, 0 5" fill="#8A8886"/>
     </marker>
+    <marker id="dep-arrow-crit" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+      <polygon points="0 0, 7 2.5, 0 5" fill="#D13438"/>
+    </marker>
   </defs>
   <!-- title bar -->
   <rect width="${W}" height="${TH}" fill="${PROJECT.color}"/>
   <circle cx="24" cy="${TH/2}" r="7" fill="white" opacity="0.25"/>
   <text x="38" y="${TH/2+6}" font-size="17" font-weight="700" fill="white" font-family="Segoe UI,sans-serif">${PROJECT.title}</text>
-  <text x="${W-12}" y="${TH/2+5}" font-size="11" fill="rgba(255,255,255,0.7)" text-anchor="end" font-family="Segoe UI,sans-serif">Jun 4, 2026</text>
+  <text x="${W-12}" y="${TH/2+5}" font-size="11" fill="rgba(255,255,255,0.7)" text-anchor="end" font-family="Segoe UI,sans-serif">${PROJECT.status}</text>
 
   <!-- header bg -->
   <rect y="${TH}" width="${LW}" height="${HH}" fill="${theme.bg}"/>
   <rect x="${LW}" y="${TH}" width="${TW}" height="${HH}" fill="${theme.bg}"/>
   <text x="16" y="${TH+HH/2+4}" font-size="11" font-weight="600" fill="${theme.sub}" letter-spacing="0.5" font-family="Segoe UI,sans-serif">TASK NAME</text>
+  <text x="${LW-52}" y="${TH+HH/2+5}" font-size="14" fill="${theme.sub}" font-family="Segoe UI,sans-serif">⊟  ⊞</text>
 
   <!-- month bands -->
   ${months.map(m => `
@@ -342,6 +367,10 @@ function toolbar(view, extra = '', filterState = 'neutral') {
     <button class="btn btn-primary">+ Add Task</button>
     <button class="btn btn-secondary">Edit Project</button>
     ${extra}
+    <div style="margin-left:auto;display:flex;align-items:center;gap:6px;">
+      <button class="settings-btn">🔗 Copy Link</button>
+      <button class="settings-btn">⚙ Options</button>
+    </div>
   </div>
   <div class="row2">
     <div class="row2-left">
@@ -353,16 +382,18 @@ function toolbar(view, extra = '', filterState = 'neutral') {
           <button class="zoom-btn">Month</button>
           <button class="zoom-btn">Quarter</button>
         </div>
-        <div class="divider"></div>
+        <button class="today-btn">Fit</button>
       ` : ''}
+      <button class="today-btn" title="Undo (Ctrl+Z)">↶</button>
+      <button class="today-btn" title="Redo (Ctrl+Y)" style="opacity:0.45;">↷</button>
     </div>
     <div class="row2-right">
       <div class="view-switcher">
+        <button class="view-btn">◫ Dashboard</button>
         <button class="view-btn ${view==='list'?'active':''}">☰ List</button>
         <button class="view-btn ${view==='gantt'?'active':''}">▬ Gantt</button>
         <button class="view-btn ${view==='kanban'?'active':''}">⬜ Kanban</button>
       </div>
-      ${view==='gantt' ? '<button class="settings-btn">⚙ Display</button>' : ''}
       <button class="icon-btn">⋯</button>
     </div>
   </div>
@@ -403,14 +434,16 @@ function listPage(filterState = 'neutral') {
   let lastPhase = null;
   for (const t of visibleTasks) {
     if (t.phase !== lastPhase) {
-      rows += `<tr style="background:#F3F2F1;"><td colspan="8" style="padding:6px 12px;font-size:11px;font-weight:700;color:#605E5C;letter-spacing:0.5px;">${t.phase.toUpperCase()}</td></tr>`;
+      rows += `<tr style="background:#F3F2F1;"><td colspan="9" style="padding:6px 12px;font-size:11px;font-weight:700;color:#605E5C;letter-spacing:0.5px;">${t.phase.toUpperCase()}</td></tr>`;
       lastPhase = t.phase;
     }
     const sc = STATUS_COLOR[t.status], sbg = STATUS_BG[t.status];
     const pc = PRIORITY_COLOR[t.priority];
     const due = isOverdue(t.end) && t.status !== 'Completed';
     const health = computeHealth(t);
-    rows += `<tr style="border-bottom:1px solid #F3F2F1;">
+    const isSel = filterState === 'neutral' && (t.id === 3 || t.id === 4);
+    rows += `<tr style="border-bottom:1px solid #F3F2F1;${isSel?'background:#EFF6FC;':''}">
+      <td style="padding:10px 0 10px 12px;width:28px;"><input type="checkbox" ${isSel?'checked':''} style="accent-color:${PROJECT.color};"/></td>
       <td style="padding:10px 12px;display:flex;align-items:center;gap:8px;">
         <span style="width:8px;height:8px;border-radius:50%;background:${sc};display:inline-block;flex-shrink:0;"></span>
         <span style="font-size:13px;color:#323130;">${t.milestone?'◆ ':''}${t.title}</span>
@@ -434,10 +467,21 @@ function listPage(filterState = 'neutral') {
 
   return page(`
     ${toolbar('list', '', filterState)}
+    ${filterState === 'neutral' ? `<div style="display:flex;align-items:center;gap:8px;padding:8px 16px;background:#EFF6FC;border-bottom:1px solid #90C8F6;font-size:12px;flex-wrap:wrap;">
+      <span style="font-weight:700;color:#323130;">2 selected</span>
+      <select class="filter-chip" style="appearance:none;"><option>Set status…</option></select>
+      <select class="filter-chip" style="appearance:none;"><option>Set priority…</option></select>
+      <input class="filter-search" style="width:120px;border-radius:4px;" placeholder="Assign to…"/><button class="btn btn-secondary" style="padding:3px 10px;font-size:12px;">Assign</button>
+      <input class="filter-search" style="width:90px;border-radius:4px;" placeholder="% complete"/><button class="btn btn-secondary" style="padding:3px 10px;font-size:12px;">Set %</button>
+      <button class="btn btn-secondary" style="padding:3px 10px;font-size:12px;color:#D13438;">Delete selected</button>
+      <button class="btn btn-ghost" style="font-size:12px;color:${PROJECT.color};">Clear selection</button>
+      <button class="btn btn-secondary" style="padding:3px 10px;font-size:12px;margin-left:auto;">Export CSV</button>
+    </div>` : `<div style="display:flex;justify-content:flex-end;padding:8px 16px;border-bottom:1px solid #F3F2F1;"><button class="btn btn-secondary" style="padding:3px 10px;font-size:12px;">Export CSV</button></div>`}
     <div style="overflow:auto;background:#fff;">
       <table style="width:100%;border-collapse:collapse;">
         <thead>
           <tr style="background:#F3F2F1;border-bottom:1px solid #EDEBE9;">
+            <th style="padding:10px 0 10px 12px;width:28px;"><input type="checkbox" style="accent-color:${PROJECT.color};"/></th>
             <th style="padding:10px 12px;font-size:11px;font-weight:600;color:#605E5C;text-align:left;min-width:250px;">TASK NAME ↑</th>
             <th style="padding:10px 12px;font-size:11px;font-weight:600;color:#605E5C;text-align:left;">STATUS</th>
             <th style="padding:10px 12px;font-size:11px;font-weight:600;color:#605E5C;text-align:left;">HEALTH</th>
@@ -470,6 +514,8 @@ function filterActivePage() {
 // ── 3. Kanban view ─────────────────────────────────────────────────────────
 function kanbanPage() {
   const cols = ['Not Started','In Progress','On Hold','Completed','Cancelled'];
+  const colLabel = c => c === 'Cancelled' ? 'Canceled' : c;
+  const WIP = { 'In Progress': 3 };
   const fmtDate = d => new Date(d).toLocaleDateString('en-US', {month:'short',day:'numeric'});
 
   function card(t) {
@@ -498,19 +544,38 @@ function kanbanPage() {
 
   const colHtml = cols.map(col => {
     const colTasks = TASKS.filter(t => t.status === col);
-    return `<div style="flex:1;min-width:0;background:#F3F2F1;border-radius:6px;padding:10px;display:flex;flex-direction:column;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-        <span style="font-size:12px;font-weight:700;color:#323130;">${col}</span>
+    if (col === 'Cancelled') {
+      // Collapsed Canceled column (collapsible, still a drop target)
+      return `<div style="width:40px;flex-shrink:0;background:#F3F2F1;border-radius:6px;padding:10px 0;display:flex;flex-direction:column;align-items:center;gap:10px;cursor:pointer;" title="Expand Canceled column">
+        <span style="font-size:11px;color:#605E5C;">▸</span>
+        <span style="writing-mode:vertical-rl;font-size:12px;font-weight:700;color:#323130;">Canceled</span>
         <span style="background:#EDEBE9;color:#605E5C;font-size:11px;font-weight:600;padding:1px 7px;border-radius:10px;">${colTasks.length}</span>
+      </div>`;
+    }
+    const limit = WIP[col];
+    const exceeded = limit && colTasks.length > limit;
+    const wip = limit
+      ? `<span style="font-size:10px;font-weight:600;padding:1px 6px;border-radius:10px;border:1px solid ${exceeded?'#D13438':'#D2D0CE'};color:${exceeded?'#D13438':'#605E5C'};background:${exceeded?'#FDF3F4':'#fff'};">${exceeded?'⚠ ':''}WIP ${colTasks.length}/${limit}</span>`
+      : `<span style="font-size:10px;color:#8A8886;padding:1px 6px;border-radius:10px;border:1px dashed #D2D0CE;">WIP</span>`;
+    return `<div style="flex:1;min-width:0;background:${exceeded?'#FDF3F4':'#F3F2F1'};border-radius:6px;padding:10px;display:flex;flex-direction:column;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:6px;">
+        <span style="font-size:12px;font-weight:700;color:#323130;">${colLabel(col)}</span>
+        <span style="display:flex;align-items:center;gap:6px;">${wip}<span style="background:#EDEBE9;color:#605E5C;font-size:11px;font-weight:600;padding:1px 7px;border-radius:10px;">${colTasks.length}</span></span>
       </div>
       ${colTasks.map(card).join('')}
       <div style="margin-top:4px;text-align:center;padding:6px;font-size:12px;color:#8A8886;cursor:pointer;">+ Add Task</div>
     </div>`;
   }).join('');
 
+  const swimlanes = `<div style="padding:10px 16px 0;background:#FAF9F8;display:flex;align-items:center;gap:8px;font-size:12px;color:#605E5C;">
+    <label>Swimlanes</label>
+    <select style="padding:4px 8px;border:1px solid #D2D0CE;border-radius:4px;font-size:12px;font-family:inherit;color:#323130;background:#fff;"><option>None</option><option>Assignee</option><option>Phase</option></select>
+  </div>`;
+
   return page(`
     ${toolbar('kanban')}
-    <div style="padding:16px;display:flex;gap:12px;background:#FAF9F8;min-height:600px;">
+    ${swimlanes}
+    <div style="padding:12px 16px 16px;display:flex;gap:12px;background:#FAF9F8;min-height:600px;">
       ${colHtml}
     </div>
   `);
@@ -560,7 +625,7 @@ function taskPanelPage() {
                 <option selected>In Progress</option>
                 <option>Completed</option>
                 <option>On Hold</option>
-                <option>Cancelled</option>
+                <option>Canceled</option>
               </select>
             </div>
             <div style="flex:1;">
@@ -582,7 +647,17 @@ function taskPanelPage() {
           </div>
           <div>
             <label style="display:block;font-size:12px;font-weight:600;color:#323130;margin-bottom:4px;">Assigned To</label>
-            <input style="width:100%;padding:7px 10px;border:1px solid #EDEBE9;border-radius:4px;font-size:13px;font-family:inherit;color:#323130;" value="${t.assignee}"/>
+            <input style="width:100%;padding:7px 10px;border:1px solid ${PROJECT.color};border-radius:4px;font-size:13px;font-family:inherit;color:#323130;" value="Am" placeholder="Search people…"/>
+            <div style="border:1px solid #EDEBE9;border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,0.10);margin-top:2px;background:#fff;font-size:12px;overflow:hidden;">
+              <div style="padding:5px 10px;font-size:10px;font-weight:700;color:#605E5C;background:#F3F2F1;letter-spacing:0.4px;">PEOPLE IN DIRECTORY</div>
+              <div style="padding:7px 10px;background:#EFF6FC;"><strong>Am</strong>y Kim <span style="color:#605E5C;">· amy.kim@contoso.com</span></div>
+              <div style="padding:7px 10px;"><strong>Am</strong>anda Lopez <span style="color:#605E5C;">· amanda.lopez@contoso.com</span></div>
+              <div style="padding:7px 10px;border-top:1px solid #EDEBE9;color:#323130;">Use “Am” (external / not in directory)</div>
+            </div>
+            <div style="margin-top:8px;">
+              <label style="display:block;font-size:11px;color:#605E5C;margin-bottom:2px;">Email (optional)</label>
+              <input style="width:100%;padding:6px 10px;border:1px solid #EDEBE9;border-radius:4px;font-size:12px;font-family:inherit;" placeholder="name@company.com"/>
+            </div>
           </div>
           <div>
             <label style="display:block;font-size:12px;font-weight:600;color:#323130;margin-bottom:4px;">Description</label>
@@ -688,15 +763,21 @@ function exportMenuPage() {
     <div style="position:relative;">
       <div style="overflow:auto;">${svg}</div>
       <!-- Callout positioned near top-right -->
-      <div style="position:absolute;top:4px;right:12px;background:#fff;border:1px solid #EDEBE9;border-radius:4px;box-shadow:0 4px 16px rgba(0,0,0,0.12);min-width:210px;z-index:100;overflow:hidden;">
+      <div style="position:absolute;top:4px;right:12px;background:#fff;border:1px solid #EDEBE9;border-radius:4px;box-shadow:0 4px 16px rgba(0,0,0,0.12);min-width:230px;z-index:100;overflow:hidden;">
         <div style="padding:4px 0;">
           <div style="padding:9px 16px;font-size:13px;color:#323130;cursor:pointer;display:flex;align-items:center;gap:8px;">📥&ensp;Import Tasks…</div>
           <div style="padding:9px 16px;font-size:13px;color:#323130;cursor:pointer;display:flex;align-items:center;gap:8px;">📊&ensp;Export to Excel</div>
           <div style="padding:9px 16px;font-size:13px;color:#323130;cursor:pointer;background:#EFF6FC;display:flex;align-items:center;gap:8px;">📑&ensp;Export to PowerPoint</div>
+          <div style="padding:9px 16px;font-size:13px;color:#323130;cursor:pointer;display:flex;align-items:center;gap:8px;">📄&ensp;Export Tasks to CSV</div>
+          <div style="padding:9px 16px;font-size:13px;color:#323130;cursor:pointer;display:flex;align-items:center;gap:8px;">📅&ensp;Export Milestones (iCal)</div>
           <div style="padding:9px 16px;font-size:13px;color:#323130;cursor:pointer;display:flex;align-items:center;gap:8px;">🖼&ensp;Export as Image (PNG)</div>
+          <div style="padding:9px 16px;font-size:13px;color:#323130;cursor:pointer;display:flex;align-items:center;gap:8px;">🖨&ensp;Print / Save as PDF</div>
+          <div style="height:1px;background:#EDEBE9;margin:4px 0;"></div>
+          <div style="padding:9px 16px;font-size:13px;color:#323130;cursor:pointer;display:flex;align-items:center;gap:8px;">📐&ensp;Set Baseline…</div>
           <div style="height:1px;background:#EDEBE9;margin:4px 0;"></div>
           <div style="padding:9px 16px;font-size:13px;color:#323130;cursor:pointer;">✏️&ensp;Edit Project</div>
-          <div style="padding:9px 16px;font-size:13px;color:#D13438;cursor:pointer;">🗑️&ensp;Delete Project</div>
+          <div style="padding:9px 16px;font-size:13px;color:#323130;cursor:pointer;">🗄️&ensp;Archive Project</div>
+          <div style="padding:9px 16px;font-size:13px;color:#D13438;cursor:pointer;">🗑️&ensp;Send to Recycle Bin</div>
         </div>
       </div>
     </div>
@@ -1017,16 +1098,17 @@ function taskPanelDetailsPage() {
 function taskPanelLinksPage() {
   // Show API Integration (task 8) which depends on UX Wireframes + Frontend Build
   const depChips = [
-    { title: 'UX Wireframes',      status: 'In Progress', color: '#0078D4' },
-    { title: 'Current State Analysis', status: 'In Progress', color: '#0078D4' },
+    { title: 'UX Wireframes',      color: '#0078D4', type: 'Finish to Start (FS)', lag: 0 },
+    { title: 'Current State Analysis', color: '#0078D4', type: 'Start to Start (SS)', lag: 2 },
   ].map(d => `
-    <span style="display:inline-flex;align-items:center;gap:6px;padding:3px 8px 3px 10px;
-      background:#EFF6FC;border:1px solid #90C8F6;border-radius:12px;font-size:12px;color:#0078D4;">
-      <span style="width:6px;height:6px;border-radius:50%;background:${d.color};flex-shrink:0;"></span>
-      ${d.title}
-      <button style="background:none;border:none;cursor:pointer;padding:0 2px;
-        color:#0078D4;font-size:14px;line-height:1;">×</button>
-    </span>`).join('');
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 8px;background:#EFF6FC;border:1px solid #90C8F6;border-radius:6px;">
+      <span style="display:inline-flex;align-items:center;gap:6px;flex:1 1 120px;font-size:12px;color:#323130;">
+        <span style="width:6px;height:6px;border-radius:50%;background:${d.color};flex-shrink:0;"></span>${d.title}
+      </span>
+      <select style="width:170px;padding:4px 6px;border:1px solid #D2D0CE;border-radius:4px;font-size:12px;font-family:inherit;background:#fff;"><option>${d.type}</option></select>
+      <input value="${d.lag}" style="width:44px;padding:4px 6px;border:1px solid #D2D0CE;border-radius:4px;font-size:12px;font-family:inherit;text-align:center;"/>
+      <button style="background:none;border:none;cursor:pointer;padding:0 4px;color:#0078D4;font-size:18px;line-height:1;">×</button>
+    </div>`).join('') + `<div style="font-size:11px;color:#605E5C;">Lag is in working days. Use a negative number for lead time.</div>`;
 
   const depOptions = ['Select a task…','Requirements Gathering','Visual Design','Frontend Build','QA Testing']
     .map((o,i) => `<option${i===0?' value=""':''}>${o}</option>`).join('');
@@ -1059,7 +1141,7 @@ function taskPanelLinksPage() {
         <label style="display:block;font-size:12px;font-weight:600;color:#323130;margin-bottom:6px;">Depends On</label>
 
         <!-- Chips -->
-        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px;">
           ${depChips}
         </div>
 
@@ -1070,8 +1152,16 @@ function taskPanelLinksPage() {
         </select>
 
         <div style="font-size:11px;color:#605E5C;margin-top:6px;">
-          This task cannot start until all dependencies are complete.
-          Arrows are drawn on the Gantt chart.
+          Task cannot start until these are completed.
+        </div>
+      </div>
+
+      <!-- Baseline (read-only) -->
+      <div>
+        <label style="display:block;font-size:12px;font-weight:600;color:#323130;margin-bottom:4px;">Baseline</label>
+        <div style="font-size:12px;color:#323130;display:flex;flex-direction:column;gap:4px;">
+          <div><strong>Baseline start</strong> Jul 8, 2026 <span style="color:#605E5C;">(on baseline)</span></div>
+          <div><strong>Baseline finish</strong> Jul 17, 2026 <span style="color:#605E5C;">(4 working day(s) later)</span></div>
         </div>
       </div>
 
@@ -1107,7 +1197,7 @@ function pptxPreviewPage() {
     { label:'In Progress', color:'#0078D4' },
     { label:'Not Started', color:'#8B929A' },
     { label:'On Hold',     color:'#CA5010' },
-    { label:'Cancelled',   color:'#D13438' },
+    { label:'Canceled',    color:'#D13438' },
   ];
 
   // ── Slide 1: Cover ──────────────────────────────────────────────────────
@@ -1451,6 +1541,8 @@ function portfolioPage() {
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;">
+        <input class="filter-search" type="search" placeholder="Search projects…" style="width:170px;"/>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:#323130;"><input type="checkbox" style="accent-color:${PROJECT.color};"/>Hide completed / canceled</label>
         <span style="font-size:12px;color:#605E5C;">Sort:</span>
         ${sortBtns}
         <button style="padding:4px 8px;font-size:14px;background:#fff;border:1px solid #EDEBE9;border-radius:4px;cursor:pointer;line-height:1;" title="Refresh">↻</button>

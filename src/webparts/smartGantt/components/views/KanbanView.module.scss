@@ -21,15 +21,15 @@
   width: 280px;
   min-width: 260px;
   max-width: 300px;
-  background: #F3F2F1;
+  background: var(--neutralLighter, #F3F2F1);
   border-radius: 8px;
   max-height: calc(100% - 0px);
   flex-shrink: 0;
   transition: background 0.15s;
 
   &.dragOver {
-    background: #EFF6FC;
-    outline: 2px dashed #0078D4;
+    background: var(--themeLighterAlt, #EFF6FC);
+    outline: 2px dashed var(--themePrimary, #0078D4);
   }
 }
 
@@ -38,7 +38,7 @@
   align-items: center;
   gap: 8px;
   padding: 12px 14px 10px;
-  border-bottom: 1px solid #EDEBE9;
+  border-bottom: 1px solid var(--neutralLight, #EDEBE9);
   flex-shrink: 0;
 }
 
@@ -52,7 +52,7 @@
 .columnTitle {
   font-size: 13px;
   font-weight: 600;
-  color: #323130;
+  color: var(--neutralPrimary, #323130);
   flex: 1;
 }
 
@@ -63,10 +63,10 @@
   min-width: 22px;
   height: 22px;
   border-radius: 11px;
-  background: #EDEBE9;
+  background: var(--neutralLight, #EDEBE9);
   font-size: 11px;
   font-weight: 700;
-  color: #605E5C;
+  color: var(--neutralSecondary, #605E5C);
   padding: 0 6px;
 }
 
@@ -81,7 +81,7 @@
 }
 
 .card {
-  background: #ffffff;
+  background: var(--white, #fff);
   border-radius: 6px;
   padding: 12px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.08);
@@ -120,12 +120,12 @@
   flex: 1;
   font-size: 13px;
   font-weight: 600;
-  color: #323130;
+  color: var(--neutralPrimary, #323130);
   line-height: 1.4;
   cursor: pointer;
 
   &:hover {
-    color: #0078D4;
+    color: var(--themePrimary, #0078D4);
   }
 }
 
@@ -163,7 +163,7 @@
 
 .cardDate {
   font-size: 11px;
-  color: #605E5C;
+  color: var(--neutralSecondary, #605E5C);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -184,7 +184,7 @@
 .progressBarSmall {
   flex: 1;
   height: 4px;
-  background: #EDEBE9;
+  background: var(--neutralLight, #EDEBE9);
   border-radius: 2px;
   overflow: hidden;
 
@@ -222,20 +222,20 @@
   width: 22px;
   height: 22px;
   border: none;
-  background: #F3F2F1;
+  background: var(--neutralLighter, #F3F2F1);
   border-radius: 3px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 11px;
-  color: #605E5C;
+  color: var(--neutralSecondary, #605E5C);
   padding: 0;
   transition: all 0.1s;
 
   &:hover {
-    background: #EDEBE9;
-    color: #323130;
+    background: var(--neutralLight, #EDEBE9);
+    color: var(--neutralPrimary, #323130);
   }
 
   &.deleteBtn:hover {
@@ -251,7 +251,7 @@
   width: 100%;
   padding: 8px 14px;
   font-size: 13px;
-  color: #605E5C;
+  color: var(--neutralSecondary, #605E5C);
   background: transparent;
   border: none;
   cursor: pointer;
@@ -261,14 +261,134 @@
   flex-shrink: 0;
 
   &:hover {
-    background: #EDEBE9;
-    color: #0078D4;
+    background: var(--neutralLight, #EDEBE9);
+    color: var(--themePrimary, #0078D4);
   }
 }
 
 .dropPlaceholder {
   height: 6px;
-  background: #0078D4;
+  background: var(--themePrimary, #0078D4);
   border-radius: 3px;
   margin: 2px 0;
+}
+
+// ── Toolbar (swimlane picker) ────────────────────────────────────────────────
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px 0;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--neutralSecondary, #605E5C);
+
+  label { font-weight: 600; }
+
+  select {
+    border: 1px solid var(--neutralQuaternary, #C8C6C4);
+    border-radius: 2px;
+    background: var(--white, #fff);
+    color: var(--neutralPrimary, #323130);
+    font-size: 12px;
+    padding: 3px 6px;
+  }
+}
+
+// ── Swimlanes ────────────────────────────────────────────────────────────────
+.lanes {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.lane {
+  flex-shrink: 0;
+
+  .board {
+    flex: none;
+    overflow-y: visible;
+  }
+}
+
+.laneHeader {
+  padding: 10px 16px 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--neutralPrimary, #323130);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+// ── WIP limits ───────────────────────────────────────────────────────────────
+.wipExceeded {
+  background: #FFF4CE;
+  box-shadow: inset 0 -2px 0 #CA5010;
+  border-radius: 8px 8px 0 0;
+}
+
+.wipBtn {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--neutralSecondary, #605E5C);
+  font-size: 11px;
+  border-radius: 3px;
+  padding: 1px 5px;
+  cursor: pointer;
+
+  &:hover { border-color: var(--neutralQuaternary, #C8C6C4); background: var(--white, #fff); }
+  &:focus-visible { outline: 2px solid var(--themePrimary, #0078D4); }
+}
+
+.wipInput {
+  width: 48px;
+  font-size: 11px;
+  padding: 1px 4px;
+  border: 1px solid var(--themePrimary, #0078D4);
+  border-radius: 3px;
+  background: var(--white, #fff);
+  color: var(--neutralPrimary, #323130);
+}
+
+.headerIconBtn {
+  border: none;
+  background: transparent;
+  color: var(--neutralSecondary, #605E5C);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+  border-radius: 3px;
+
+  &:hover { background: var(--white, #fff); }
+  &:focus-visible { outline: 2px solid var(--themePrimary, #0078D4); }
+}
+
+// ── Collapsed Cancelled column ───────────────────────────────────────────────
+.columnCollapsed {
+  width: 44px;
+  min-width: 44px;
+  max-width: 44px;
+  align-items: center;
+  padding: 10px 0;
+  gap: 10px;
+  opacity: 0.75;
+}
+
+.collapsedTitle {
+  writing-mode: vertical-rl;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--neutralPrimary, #323130);
+  white-space: nowrap;
+}
+
+@media (forced-colors: active) {
+  .card { border: 1px solid CanvasText; }
+  .column { border: 1px solid CanvasText; }
+  .wipExceeded { border: 2px solid Highlight; box-shadow: none; }
+  .columnDot, .priorityDot { forced-color-adjust: none; }
+  .column.dragOver { outline-color: Highlight; }
 }

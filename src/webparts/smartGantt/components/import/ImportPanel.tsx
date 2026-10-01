@@ -1,7 +1,7 @@
 import * as React from 'react';
 import {
   Panel, PanelType, PrimaryButton, DefaultButton, Spinner, SpinnerSize, Stack,
-  TextField, Dropdown, IDropdownOption, Label,
+  TextField, Dropdown, IDropdownOption, Label, Checkbox,
 } from '@fluentui/react';
 import { WebPartContext } from '@microsoft/sp-webpart-base';
 
@@ -9,16 +9,28 @@ import {
   IImportSource, ColumnMapping, IPlannerPlan,
   parseExcelFile, fetchPlannerPlans, fetchPlannerTasks,
   applyMapping, filterMappedRows, batchImport, resolveDependencies, IBatchImportResult,
+  DateOrder,
 } from '../../services/ImportService';
 import { IProject, ITask, PROJECT_COLORS, PROJECT_STATUS_OPTIONS, ProjectStatus } from '../../models';
 import { SharePointService } from '../../services/SharePointService';
 import { ColumnMapper } from './ColumnMapper';
+import { ColorSwatchPicker } from '../common/ColorSwatchPicker';
+import { onActivate } from '../common/a11y';
 import styles from './ImportPanel.module.scss';
 import * as strings from 'SmartGanttWebPartStrings';
 import { formatString } from '../localeUtils';
 
 type ImportStep = 'source' | 'project-details' | 'map' | 'importing' | 'done';
 type SourceType = 'excel' | 'planner' | null;
+
+interface IRowProblem {
+  /** Spreadsheet row number (the header is row 1). */
+  rowNum: number;
+  message: string;
+}
+
+// How many row problems the map step lists before summarizing the rest.
+const MAX_PROBLEMS_SHOWN = 5;
 
 interface IImportPanelProps {
   isOpen: boolean;
@@ -34,6 +46,56 @@ interface IImportPanelProps {
    *  caller can navigate to it. In regular mode the argument is undefined. */
   onImportComplete: (newProject?: IProject) => void;
 }
+
+/** Copies text to the clipboard, falling back to a hidden textarea where the
+ *  async Clipboard API isn't available (older browsers, non-secure frames). */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch { /* fall through to the legacy path */ }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Header row for an error/warning list: label on the left, "Copy details" on the right. */
+const CopyableListHeader: React.FC<{ label: string; color: string; lines: string[] }> = ({ label, color, lines }) => {
+  const [copied, setCopied] = React.useState(false);
+  const timer = React.useRef<number | undefined>(undefined);
+  React.useEffect(() => () => window.clearTimeout(timer.current), []);
+  const onCopy = async (): Promise<void> => {
+    if (await copyText(lines.join('\n'))) {
+      setCopied(true);
+      window.clearTimeout(timer.current);
+      timer.current = window.setTimeout(() => setCopied(false), 2000);
+    }
+  };
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color }}>{label}</div>
+      <DefaultButton
+        text={copied ? strings.Import_Panel_Copied : strings.Import_Panel_CopyDetails}
+        iconProps={{ iconName: copied ? 'CheckMark' : 'Copy' }}
+        onClick={onCopy}
+        styles={{ root: { height: 24, minWidth: 0, padding: '0 8px', fontSize: 12 } }}
+        aria-live="polite"
+      />
+    </div>
+  );
+};
 
 export const ImportPanel: React.FC<IImportPanelProps> = ({
   isOpen, project, existingTasks, spService, context, onDismiss, onImportComplete,
@@ -61,6 +123,13 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
   // Import progress
   const [importProgress, setImportProgress] = React.useState({ done: 0, total: 0 });
   const [importResult, setImportResult] = React.useState<IBatchImportResult | null>(null);
+  // Non-fatal issues (e.g. unresolved dependency links) — kept apart from failed rows
+  // so they are still shown when every row imported.
+  const [importWarnings, setImportWarnings] = React.useState<string[]>([]);
+
+  // Excel mapping options
+  const [dateOrder, setDateOrder] = React.useState<DateOrder>('auto');
+  const [skipInvalid, setSkipInvalid] = React.useState(false);
 
   // New-project state (create mode only)
   const [newProjectTitle, setNewProjectTitle] = React.useState('');
@@ -84,6 +153,9 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
       setPlans([]);
       setPlansError('');
       setImportResult(null);
+      setImportWarnings([]);
+      setDateOrder('auto');
+      setSkipInvalid(false);
       setImportProgress({ done: 0, total: 0 });
       setCreatedProject(null);
       setNewProjectTitle('');
@@ -110,6 +182,42 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
     }
   }, [sourceType]);
 
+  // Row-level validation, run before importing: missing title, unparseable
+  // dates, due before start. Fully blank rows are ignored. Blank-title rows get
+  // a placeholder title so applyMapping() keeps the results index-aligned with
+  // the source rows.
+  const validation = React.useMemo(() => {
+    const problems: IRowProblem[] = [];
+    const badRows = new Set<number>();
+    if (!importSource) return { problems, badRows };
+    const titleCol = Object.keys(mapping).find(k => mapping[k] === 'title');
+    if (!titleCol) return { problems, badRows };
+    const startCol = Object.keys(mapping).find(k => mapping[k] === 'startDate');
+    const dueCol = Object.keys(mapping).find(k => mapping[k] === 'dueDate');
+    const rows = importSource.rows;
+    const aligned = rows.map(r => ((r[titleCol] ?? '').trim() ? r : { ...r, [titleCol]: '\u0000' }));
+    const mapped = applyMapping(aligned, mapping, { dateOrder });
+    rows.forEach((r, i) => {
+      const hasContent = Object.keys(r).some(k => String(r[k] ?? '').trim() !== '');
+      if (!hasContent) return;
+      const t = mapped[i];
+      const messages: string[] = [];
+      if (!(r[titleCol] ?? '').trim()) messages.push(strings.Import_Panel_ProblemMissingTitle);
+      if (startCol && (r[startCol] ?? '').trim() && !t?.startDate) {
+        messages.push(formatString(strings.Import_Panel_ProblemInvalidStartDate, { value: r[startCol].trim() }));
+      }
+      if (dueCol && (r[dueCol] ?? '').trim() && !t?.dueDate) {
+        messages.push(formatString(strings.Import_Panel_ProblemInvalidDueDate, { value: r[dueCol].trim() }));
+      }
+      if (t?.startDate && t?.dueDate && t.dueDate < t.startDate) messages.push(strings.Import_Panel_ProblemEndBeforeStart);
+      if (messages.length > 0) {
+        badRows.add(i);
+        problems.push({ rowNum: i + 2, message: messages.join(' · ') });
+      }
+    });
+    return { problems, badRows };
+  }, [importSource, mapping, dateOrder]);
+
   // ─── Handlers ─────────────────────────────────────────────────────────────
 
   const handleFileDrop = async (file: File): Promise<void> => {
@@ -118,6 +226,8 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
       const source = await parseExcelFile(file);
       setImportSource(source);
       setMapping(source.autoMapping);
+      setDateOrder('auto');
+      setSkipInvalid(false);
 
       if (createMode) {
         // Pre-fill project name from filename (strip extension and separators)
@@ -193,6 +303,7 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
   const handleProjectDetailsNext = (): void => {
     const errs: Record<string, string> = {};
     if (!newProjectTitle.trim()) errs.title = strings.ProjectPanel_ProjectNameRequired;
+    if (newProjectStart && newProjectEnd && newProjectEnd < newProjectStart) errs.end = strings.ProjectPanel_DueDateError;
     setProjectErrors(errs);
     if (Object.keys(errs).length > 0) return;
 
@@ -211,8 +322,14 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
     if (!importSource) return;
     // Keep the raw rows used for dependency resolution in lockstep with the
     // task array batchImport() creates from, so createdIds line up positionally.
-    const filteredRows = filterMappedRows(importSource.rows, mapping);
-    const tasks = applyMapping(importSource.rows, mapping);
+    // Skipped rows keep their place (blank title) instead of being removed, so
+    // spreadsheet row numbers used by MS Project-style dependencies stay valid.
+    const titleColumn = Object.keys(mapping).find(k => mapping[k] === 'title');
+    const sourceRows = skipInvalid && titleColumn
+      ? importSource.rows.map((r, i) => (validation.badRows.has(i) ? { ...r, [titleColumn]: '' } : r))
+      : importSource.rows;
+    const filteredRows = filterMappedRows(sourceRows, mapping);
+    const tasks = applyMapping(sourceRows, mapping, { dateOrder });
     if (tasks.length === 0) return;
 
     setStep('importing');
@@ -271,28 +388,32 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
     // tasks have been created. Tasks are already imported at this point, so
     // a failure here is reported as a warning rather than stranding the
     // wizard on the importing step.
+    const warnings: string[] = [];
     if (Object.values(mapping).includes('dependencies')) {
       try {
         const depResult = await resolveDependencies(
           spService, targetProject.listName, filteredRows, mapping, result.createdIds
         );
-        if (depResult.warnings.length > 0) result.errors.push(...depResult.warnings);
+        if (depResult.warnings.length > 0) warnings.push(...depResult.warnings);
       } catch (e) {
-        result.errors.push(formatString(strings.ImportPanel_CouldNotLinkDependencies, { detail: e instanceof Error ? e.message : strings.ImportPanel_UnknownError }));
+        warnings.push(formatString(strings.ImportPanel_CouldNotLinkDependencies, { detail: e instanceof Error ? e.message : strings.ImportPanel_UnknownError }));
       }
     }
 
+    setImportWarnings(warnings);
     setImportResult(result);
     setStep('done');
   };
 
   const hasTitleMapped = Object.values(mapping).includes('title');
   const taskCount = importSource
-    ? importSource.rows.filter(r => {
+    ? importSource.rows.filter((r, i) => {
         const titleCol = Object.keys(mapping).find(k => mapping[k] === 'title');
-        return titleCol ? !!r[titleCol]?.trim() : false;
+        if (!titleCol || !r[titleCol]?.trim()) return false;
+        return !(skipInvalid && validation.badRows.has(i));
       }).length
     : 0;
+  const hasDateColumns = Object.values(mapping).some(v => v === 'startDate' || v === 'dueDate');
 
   // ─── Step renders ──────────────────────────────────────────────────────────
 
@@ -302,6 +423,10 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
         <div
           className={`${styles.sourceCard} ${sourceType === 'excel' ? styles.selected : ''}`}
           onClick={() => selectSource('excel')}
+          role="button"
+          tabIndex={0}
+          aria-pressed={sourceType === 'excel'}
+          onKeyDown={onActivate(() => selectSource('excel'))}
         >
           <div className={styles.sourceIcon}>📊</div>
           <div className={styles.sourceTitle}>{strings.ImportPanel_SourceExcelTitle}</div>
@@ -312,6 +437,10 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
         <div
           className={`${styles.sourceCard} ${sourceType === 'planner' ? styles.selected : ''}`}
           onClick={() => selectSource('planner')}
+          role="button"
+          tabIndex={0}
+          aria-pressed={sourceType === 'planner'}
+          onKeyDown={onActivate(() => selectSource('planner'))}
         >
           <div className={styles.sourceIcon}>📋</div>
           <div className={styles.sourceTitle}>{strings.ImportPanel_SourcePlannerTitle}</div>
@@ -327,6 +456,10 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
           <div
             className={`${styles.dropZone} ${dragOver ? styles.dragOver : ''} ${importSource ? styles.hasFile : ''}`}
             onClick={() => fileInputRef.current?.click()}
+            role="button"
+            tabIndex={0}
+            aria-label={importSource ? formatString(strings.Import_Panel_DropZoneChangeAriaLabel, { fileName: importSource.fileName || '' }) : strings.Import_Panel_DropZoneAriaLabel}
+            onKeyDown={onActivate(() => fileInputRef.current?.click())}
             onDragOver={e => { e.preventDefault(); setDragOver(true); }}
             onDragLeave={() => setDragOver(false)}
             onDrop={handleDropZoneDrop}
@@ -360,7 +493,7 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
             onChange={handleFileInputChange}
           />
           {fileError && (
-            <div style={{ color: '#D13438', fontSize: 13, marginTop: 8 }}>⚠ {fileError}</div>
+            <div role="alert" style={{ color: '#D13438', fontSize: 13, marginTop: 8 }}>⚠ {fileError}</div>
           )}
         </>
       )}
@@ -377,7 +510,7 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
           {plansError && (
             <div style={{ color: '#D13438', fontSize: 13, padding: '12px 0' }}>
               ⚠ {plansError}
-              <div style={{ fontSize: 12, color: '#605E5C', marginTop: 6 }}>
+              <div style={{ fontSize: 12, color: 'var(--neutralSecondary, #605E5C)', marginTop: 6 }}>
                 {strings.ImportPanel_PlannerPermissionsHintPrefix}<em>{strings.ImportPanel_PlannerPermissionsHintEmphasis}</em>{strings.ImportPanel_PlannerPermissionsHintSuffix}
               </div>
             </div>
@@ -395,6 +528,11 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
                   key={plan.id}
                   className={`${styles.planItem} ${selectedPlan?.id === plan.id ? styles.selected : ''}`}
                   onClick={() => void handlePlanSelect(plan)}
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={selectedPlan?.id === plan.id}
+                  aria-label={formatString(strings.Import_Panel_PlanAriaLabel, { planName: plan.title, groupName: plan.groupName })}
+                  onKeyDown={onActivate(() => void handlePlanSelect(plan))}
                 >
                   <div className={styles.planIcon}>📋</div>
                   <div className={styles.planInfo}>
@@ -440,12 +578,8 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
 
   const renderProjectDetailsStep = (): React.ReactNode => (
     <div>
-      <div style={{ fontSize: 13, color: '#605E5C', marginBottom: 16 }}>
-        {/* NOTE: no loc key matches this exact sentence — ImportPanel_ProjectDetailsIntroPrefix/Suffix
-            are worded for "Importing into <project name>", not a create-mode task-count summary.
-            Left hardcoded; see report. */}
-        A new project will be created and all {taskCount} task{taskCount !== 1 ? 's' : ''} will be imported into it.
-        You can change these details any time after import.
+      <div style={{ fontSize: 13, color: 'var(--neutralSecondary, #605E5C)', marginBottom: 16 }}>
+        {formatString(taskCount === 1 ? strings.Import_Panel_NewProjectIntroOne : strings.Import_Panel_NewProjectIntroMany, { count: taskCount })}
       </div>
 
       <TextField
@@ -474,32 +608,45 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
         styles={{ root: { marginBottom: 14 } }}
       />
 
-      <Label>{strings.ImportPanel_ColorLabel}</Label>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
-        {PROJECT_COLORS.map(c => (
-          <div
-            key={c}
-            onClick={() => setNewProjectColor(c)}
-            style={{
-              width: 28,
-              height: 28,
-              borderRadius: '50%',
-              background: c,
-              cursor: 'pointer',
-              border: newProjectColor === c ? '3px solid #323130' : '3px solid transparent',
-              outline: newProjectColor === c ? `2px solid ${c}` : 'none',
-              outlineOffset: 1,
-              transition: 'border 0.1s',
-            }}
+      <Stack horizontal tokens={{ childrenGap: 12 }} styles={{ root: { marginBottom: 14 } }}>
+        <Stack.Item grow>
+          <TextField
+            label={strings.ProjectPanel_StartDateLabel}
+            type="date"
+            value={newProjectStart}
+            onChange={(_, v) => { setNewProjectStart(v ?? ''); setProjectErrors(prev => ({ ...prev, end: '' })); }}
           />
-        ))}
-      </div>
+        </Stack.Item>
+        <Stack.Item grow>
+          <TextField
+            label={strings.ProjectPanel_DueDateLabel}
+            type="date"
+            value={newProjectEnd}
+            onChange={(_, v) => { setNewProjectEnd(v ?? ''); setProjectErrors(prev => ({ ...prev, end: '' })); }}
+            errorMessage={projectErrors.end}
+          />
+        </Stack.Item>
+      </Stack>
+
+      <Label>{strings.ImportPanel_ColorLabel}</Label>
+      <ColorSwatchPicker
+        colors={PROJECT_COLORS}
+        value={newProjectColor}
+        onChange={setNewProjectColor}
+        ariaLabel={strings.ImportPanel_ColorLabel}
+      />
     </div>
   );
 
+  const dateOrderOptions: IDropdownOption[] = [
+    { key: 'auto', text: strings.Import_Panel_DateOrderAuto },
+    { key: 'mdy', text: strings.Import_Panel_DateOrderMDY },
+    { key: 'dmy', text: strings.Import_Panel_DateOrderDMY },
+  ];
+
   const renderMapStep = (): React.ReactNode => (
     <div>
-      <div style={{ fontSize: 13, color: '#605E5C', marginBottom: 14 }}>
+      <div style={{ fontSize: 13, color: 'var(--neutralSecondary, #605E5C)', marginBottom: 14 }}>
         {strings.ImportPanel_MapIntro}
       </div>
       {importSource && (
@@ -509,6 +656,53 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
           onChange={setMapping}
         />
       )}
+
+      {/* Ambiguous numeric dates (03/04/2026) — let the user override detection */}
+      {importSource && sourceType === 'excel' && hasDateColumns && (
+        <div style={{ marginTop: 16 }}>
+          <Dropdown
+            label={strings.Import_Panel_DateOrderLabel}
+            selectedKey={dateOrder}
+            options={dateOrderOptions}
+            onChange={(_, o) => { if (o) setDateOrder(o.key as DateOrder); }}
+          />
+          <div style={{ fontSize: 11, color: 'var(--neutralSecondary, #605E5C)', marginTop: 4 }}>
+            {strings.Import_Panel_DateOrderHint}
+            {dateOrder === 'auto' && importSource.detectedDateOrder && (
+              <> {formatString(strings.Import_Panel_DateOrderDetected, {
+                order: importSource.detectedDateOrder === 'dmy' ? strings.Import_Panel_DateOrderDMY : strings.Import_Panel_DateOrderMDY,
+              })}</>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Row-level problems, found before anything is written */}
+      {importSource && hasTitleMapped && validation.problems.length > 0 && (
+        <div style={{ marginTop: 16 }} role="region" aria-label={strings.Import_Panel_ValidationHeader}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: '#CA5010', marginBottom: 6 }}>
+            ⚠ {formatString(validation.problems.length === 1 ? strings.Import_Panel_ValidationSummaryOne : strings.Import_Panel_ValidationSummaryMany, { count: validation.problems.length })}
+          </div>
+          <div className={styles.errorList}>
+            {validation.problems.slice(0, MAX_PROBLEMS_SHOWN).map(pr => (
+              <div key={pr.rowNum} className={styles.errorItem}>
+                • {formatString(strings.Import_Panel_ValidationRow, { rowNum: pr.rowNum, problem: pr.message })}
+              </div>
+            ))}
+            {validation.problems.length > MAX_PROBLEMS_SHOWN && (
+              <div className={styles.errorItem}>
+                {formatString(strings.Import_Panel_ValidationMore, { count: validation.problems.length - MAX_PROBLEMS_SHOWN })}
+              </div>
+            )}
+          </div>
+          <Checkbox
+            label={strings.Import_Panel_SkipInvalidRows}
+            checked={skipInvalid}
+            onChange={(_, checked) => setSkipInvalid(!!checked)}
+            styles={{ root: { marginTop: 8 } }}
+          />
+        </div>
+      )}
     </div>
   );
 
@@ -516,14 +710,22 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
     const { done, total } = importProgress;
     const pct = total > 0 ? Math.round((done / total) * 100) : 0;
     return (
-      <div className={styles.progressSection}>
+      <div className={styles.progressSection} role="status" aria-live="polite">
         <div className={styles.progressTitle}>
           {createMode && done === 0 ? strings.ImportPanel_CreatingProjectStatus : strings.ImportPanel_ImportingTasksStatus}
         </div>
-        <div className={styles.progressBar} style={{ width: '100%' }}>
+        <div
+          className={styles.progressBar}
+          style={{ width: '100%' }}
+          role="progressbar"
+          aria-label={strings.ImportPanel_ImportingTasksStatus}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={pct}
+        >
           <div className={styles.progressFill} style={{ width: `${pct}%` }} />
         </div>
-        <div className={styles.progressLabel}>{formatString(strings.ImportPanel_ProgressLabel, { done, total })} ({pct}%)</div>
+        <div className={styles.progressLabel}>{formatString(strings.Import_Panel_ProgressLabelWithPercent, { done, total, percent: pct })}</div>
         <Spinner size={SpinnerSize.medium} />
       </div>
     );
@@ -532,20 +734,23 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
   const renderDoneStep = (): React.ReactNode => {
     if (!importResult) return null;
     const hasErrors = importResult.failed > 0;
+    const hasWarnings = importWarnings.length > 0;
     const targetProject = createdProject ?? project;
     // Project creation itself failed (create mode only) — nothing was
     // imported, so don't claim "0 tasks added to <blank project>".
     const projectCreateFailed = createMode && !createdProject;
     return (
       <div className={styles.resultSection}>
-        <div className={`${styles.resultCard} ${hasErrors ? styles.partial : styles.success}`}>
-          <div className={styles.resultIcon}>{projectCreateFailed ? '❌' : hasErrors ? '⚠️' : '🎉'}</div>
+        <div className={`${styles.resultCard} ${hasErrors || hasWarnings ? styles.partial : styles.success}`} role="status">
+          <div className={styles.resultIcon}>{projectCreateFailed ? '❌' : hasErrors || hasWarnings ? '⚠️' : '🎉'}</div>
           <div className={styles.resultInfo}>
             <div className={styles.resultTitle}>
               {projectCreateFailed
                 ? strings.ImportPanel_CouldNotCreateProject
                 : hasErrors
                 ? formatString(strings.ImportPanel_ImportCompletedWithErrors, { count: importResult.failed })
+                : hasWarnings
+                ? formatString(importWarnings.length === 1 ? strings.Import_Panel_SuccessWithWarningsOne : strings.Import_Panel_SuccessWithWarningsMany, { count: importWarnings.length })
                 : createMode ? strings.ImportPanel_ProjectCreatedSuccess : strings.ImportPanel_ImportSuccessful}
             </div>
             {!projectCreateFailed && (
@@ -558,20 +763,29 @@ export const ImportPanel: React.FC<IImportPanelProps> = ({
                       {i < arr.length - 1 && <strong>{targetProject?.title}</strong>}
                     </React.Fragment>
                   ))}
-                {hasErrors && ` · ${importResult.failed} failed`}
+                {hasErrors && ` · ${formatString(strings.Import_Panel_FailedCount, { count: importResult.failed })}`}
               </div>
             )}
           </div>
         </div>
 
-        {hasErrors && importResult.errors.length > 0 && (
+        {importResult.errors.length > 0 && (
           <div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: '#D13438', marginBottom: 6 }}>
-              {strings.ImportPanel_FailedRowsLabel}
-            </div>
+            <CopyableListHeader label={strings.ImportPanel_FailedRowsLabel} color="#D13438" lines={importResult.errors} />
             <div className={styles.errorList}>
               {importResult.errors.map((e, i) => (
                 <div key={i} className={styles.errorItem}>• {e}</div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {hasWarnings && (
+          <div>
+            <CopyableListHeader label={formatString(strings.Import_Panel_WarningsLabel, { count: importWarnings.length })} color="#CA5010" lines={importWarnings} />
+            <div className={styles.errorList}>
+              {importWarnings.map((w, i) => (
+                <div key={i} className={styles.errorItem}>• {w}</div>
               ))}
             </div>
           </div>

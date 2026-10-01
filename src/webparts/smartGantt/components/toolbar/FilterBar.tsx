@@ -14,6 +14,8 @@ interface IFilterBarProps {
   phases: string[];
   matchCount: number;
   totalCount: number;
+  /** Changes whenever the selected project does — cancels any pending search debounce. */
+  resetKey?: string | number;
 }
 
 const chipStyle = (active: boolean): React.CSSProperties => ({
@@ -22,9 +24,9 @@ const chipStyle = (active: boolean): React.CSSProperties => ({
   gap: 4,
   padding: '3px 10px',
   borderRadius: 12,
-  border: `1px solid ${active ? '#0078D4' : '#D2D0CE'}`,
-  background: active ? '#EFF6FC' : '#fff',
-  color: active ? '#0078D4' : '#605E5C',
+  border: `1px solid ${active ? 'var(--themePrimary, #0078D4)' : 'var(--neutralQuaternaryAlt, #D2D0CE)'}`,
+  background: active ? 'var(--themeLighter, #EFF6FC)' : 'var(--white, #fff)',
+  color: active ? 'var(--themePrimary, #0078D4)' : 'var(--neutralSecondary, #605E5C)',
   fontSize: 12,
   fontWeight: active ? 600 : 400,
   cursor: 'pointer',
@@ -77,7 +79,7 @@ function MultiChip<T extends string>({ label, options, selected, onChange }: IMu
             {active && (
               <button
                 style={{
-                  background: 'none', border: 'none', color: '#0078D4', fontSize: 12,
+                  background: 'none', border: 'none', color: 'var(--themePrimary, #0078D4)', fontSize: 12,
                   cursor: 'pointer', padding: 0, textAlign: 'left',
                 }}
                 onClick={() => onChange([])}
@@ -100,11 +102,19 @@ const DUE_OPTIONS: { id: DueFilter; label: string }[] = [
 ];
 
 const FilterBarComponent: React.FC<IFilterBarProps> = ({
-  filter, onChange, assignees, phases, matchCount, totalCount,
+  filter, onChange, assignees, phases, matchCount, totalCount, resetKey,
 }) => {
   const active = isFilterActive(filter);
+  // Always the newest filter. The debounced search below fires a timer later;
+  // if it spread the filter captured when the keystroke happened it would undo
+  // any chip the user clicked in the meantime (and, after a project switch,
+  // re-apply the old project's chips to the new one).
+  const filterRef = React.useRef(filter);
+  filterRef.current = filter;
+  const onChangeRef = React.useRef(onChange);
+  onChangeRef.current = onChange;
   const set = <K extends keyof ITaskFilter>(key: K, value: ITaskFilter[K]): void => {
-    onChange({ ...filter, [key]: value });
+    onChangeRef.current({ ...filterRef.current, [key]: value });
   };
 
   // The search box has local state debounced ~150ms before it reaches the
@@ -113,18 +123,33 @@ const FilterBarComponent: React.FC<IFilterBarProps> = ({
   const [localText, setLocalText] = React.useState(filter.text);
   const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Keep local text in sync when the filter changes externally (project
-  // switch, "Clear filters").
-  React.useEffect(() => setLocalText(filter.text), [filter.text]);
-
-  React.useEffect(() => () => {
+  const cancelPending = (): void => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-  }, []);
+    debounceRef.current = null;
+  };
+
+  // Keep local text in sync when the filter changes externally (project
+  // switch, "Clear filters", a shared link). While a debounce is pending the
+  // user is mid-typing, so the echo of an earlier keystroke must not overwrite
+  // what they've typed since.
+  React.useEffect(() => {
+    if (debounceRef.current === null) setLocalText(filter.text);
+  }, [filter.text]);
+
+  // Project switch or unmount: a pending search must not leak into another project.
+  React.useEffect(() => {
+    cancelPending();
+    setLocalText(filterRef.current.text);
+    return cancelPending;
+  }, [resetKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleTextChange = (v: string): void => {
     setLocalText(v);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => set('text', v), 150);
+    cancelPending();
+    debounceRef.current = setTimeout(() => {
+      debounceRef.current = null;
+      set('text', v);
+    }, 150);
   };
 
   return (
@@ -139,7 +164,9 @@ const FilterBarComponent: React.FC<IFilterBarProps> = ({
           width: 160,
           padding: '4px 10px',
           borderRadius: 12,
-          border: `1px solid ${localText ? '#0078D4' : '#D2D0CE'}`,
+          border: `1px solid ${localText ? 'var(--themePrimary, #0078D4)' : 'var(--neutralQuaternaryAlt, #D2D0CE)'}`,
+          background: 'var(--white, #fff)',
+          color: 'var(--neutralPrimary, #323130)',
           fontSize: 12,
           outline: 'none',
           fontFamily: 'inherit',
@@ -190,16 +217,16 @@ const FilterBarComponent: React.FC<IFilterBarProps> = ({
       </select>
       {active && (
         <>
-          <span style={{ fontSize: 12, color: '#605E5C' }}>
+          <span style={{ fontSize: 12, color: 'var(--neutralSecondary, #605E5C)' }}>
             {formatString(strings.FilterBar_MatchCount, { matchCount, totalCount })}
           </span>
           <button
             style={{
-              background: 'none', border: 'none', color: '#0078D4',
+              background: 'none', border: 'none', color: 'var(--themePrimary, #0078D4)',
               fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '3px 6px',
             }}
             onClick={() => {
-              if (debounceRef.current) clearTimeout(debounceRef.current);
+              cancelPending();
               setLocalText('');
               onChange({ text: '', statuses: [], priorities: [], assignees: [], phases: [], due: 'all' });
             }}

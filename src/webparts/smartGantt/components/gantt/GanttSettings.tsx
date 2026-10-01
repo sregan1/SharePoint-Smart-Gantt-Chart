@@ -72,6 +72,7 @@ export const GanttSettings: React.FC<IGanttSettingsProps> = ({
               <button
                 key={o.id}
                 className={`${styles.chip} ${settings.colorBy === o.id ? styles.selected : ''}`}
+                aria-pressed={settings.colorBy === o.id}
                 onClick={() => set('colorBy', o.id)}
               >
                 <span>{o.icon}</span> {o.label}
@@ -109,6 +110,7 @@ export const GanttSettings: React.FC<IGanttSettingsProps> = ({
               <button
                 key={o.id}
                 className={`${styles.chip} ${settings.weekLabel === o.id ? styles.selected : ''}`}
+                aria-pressed={settings.weekLabel === o.id}
                 onClick={() => set('weekLabel', o.id)}
                 title={o.desc}
               >
@@ -118,7 +120,7 @@ export const GanttSettings: React.FC<IGanttSettingsProps> = ({
             ))}
           </div>
           {settings.weekLabel === 'project' && (
-            <div style={{ fontSize: 12, color: '#605E5C', marginTop: 4 }}>
+            <div style={{ fontSize: 12, color: 'var(--neutralSecondary, #605E5C)', marginTop: 4 }}>
               {strings.GanttSettings_ProjectWeeksHint}
             </div>
           )}
@@ -132,6 +134,7 @@ export const GanttSettings: React.FC<IGanttSettingsProps> = ({
               <button
                 key={o.id}
                 className={`${styles.chip} ${settings.barStyle === o.id ? styles.selected : ''}`}
+                aria-pressed={settings.barStyle === o.id}
                 onClick={() => set('barStyle', o.id)}
               >
                 {o.label}
@@ -148,6 +151,7 @@ export const GanttSettings: React.FC<IGanttSettingsProps> = ({
               <button
                 key={h.value}
                 className={`${styles.heightBtn} ${settings.rowHeight === h.value ? styles.selected : ''}`}
+                aria-pressed={settings.rowHeight === h.value}
                 onClick={() => set('rowHeight', h.value)}
               >
                 <div className={styles.heightPreview}>
@@ -181,7 +185,7 @@ export const GanttSettings: React.FC<IGanttSettingsProps> = ({
                 ['dependenciesOnHover',  strings.GanttSettings_AllOthersOnHoverOnly],
               ] as const).map(([key, label]) => (
                 <div key={key} className={styles.toggleRow} style={{ paddingLeft: 20 }}>
-                  <span className={styles.toggleLabel} style={{ color: '#605E5C' }}>{label}</span>
+                  <span className={styles.toggleLabel} style={{ color: 'var(--neutralSecondary, #605E5C)' }}>{label}</span>
                   <Toggle checked={settings[key]} onChange={(_, v) => set(key, !!v)} ariaLabel={label} styles={{ root: { margin: 0 } }} />
                 </div>
               ))}

@@ -5,7 +5,7 @@
 [![Download](https://img.shields.io/badge/Download-Latest%20Release-CA5010?style=for-the-badge&logo=github&logoColor=white)](../../releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 
-A SharePoint Framework (SPFx) web part for project management with five views — Portfolio, Gantt chart, List, Kanban board, and Dashboard — all backed by SharePoint lists.
+A SharePoint Framework (SPFx) web part for project management with five views — Portfolio, Gantt chart, List, Kanban board, and Dashboard — all backed by SharePoint lists. Current release: **v1.5.0** (see the [Changelog](CHANGELOG.md)).
 
 ![SPFx](https://img.shields.io/badge/SPFx-1.20.0-0078D4?logo=microsoft&logoColor=white) ![Node](https://img.shields.io/badge/Node-18.x-339933?logo=nodedotjs&logoColor=white) ![React](https://img.shields.io/badge/React-17-61DAFB?logo=react&logoColor=black) ![TypeScript](https://img.shields.io/badge/TypeScript-4.7-3178C6?logo=typescript&logoColor=white) ![PnPjs](https://img.shields.io/badge/PnPjs-3.26-orange) ![pptxgenjs](https://img.shields.io/badge/pptxgenjs-4.0-blueviolet)
 
@@ -17,19 +17,26 @@ A SharePoint Framework (SPFx) web part for project management with five views �
 
 - **Portfolio View** — Cross-project overview showing all projects as summary cards with computed health indicators, progress bars, task counts, and a mini date-range timeline. Accessible from the project selector dropdown.
 - **Health Status** — Automatic "On Track / At Risk / Overdue" indicators computed from each task's dates and progress percentage — no manual entry required. Shown as badges in the List, Kanban, Gantt tooltip, and Portfolio views, with a "By Health" Gantt bar color option.
-- **Gantt Chart** — Custom SVG timeline with drag-to-move, drag-to-resize, dependency arrows, phase grouping, zoom levels (Day / Week / Month / Quarter), and a today indicator
-- **List View** — Sortable, Excel-style grid with inline status and priority editing, overdue highlighting, progress bars, and health badges
-- **Kanban Board** — Drag-and-drop cards across status columns (Not Started → In Progress → On Hold → Completed → Cancelled), with health badges on each card
+- **Gantt Chart** — Custom SVG timeline with drag-to-move, drag-to-resize, drag-to-create, drag-to-link, keyboard move/resize, dependency arrows (FS / SS / FF / SF with lag), auto-shifting dependents with Undo, critical path highlight, baselines with variance, phase grouping, zoom levels (Day / Week / Month / Quarter) plus fit-to-project, and a today indicator
+- **List View** — Sortable, Excel-style grid with inline status and priority editing, bulk edit and bulk delete, CSV export, overdue highlighting, progress bars, and health badges
+- **Kanban Board** — Drag-and-drop cards across status columns (Not Started → In Progress → On Hold → Completed → Canceled), with health badges, WIP limits, and optional Phase or Assignee swimlanes
 - **Task Filter Bar** — Third toolbar row with text search, multi-select Status / Priority / Assignee / Phase filters, and a due-date filter (Overdue / Due Today / Due in 7 days). Active filters persist across view switches; a match count and one-click Clear keep filtering fast
-- **Project management** — Each project gets its own SharePoint list with 15 pre-built columns (status, priority, dates, assignee, % complete, phase, milestones, dependencies, and more)
+- **Project management** — Each project gets its own SharePoint list with 17 pre-built columns (status, priority, dates, assignee, % complete, phase, milestones, dependencies, baseline dates, and more)
 - **Display settings** — Customize colors (including by health), header theme, week numbering, bar style, row height, and show/hide toggles including health badges
-- **Export** — Download tasks as Excel, export a full PowerPoint project report (cover, summary, Gantt chart, and recent activity), or save the Gantt as a high-resolution PNG
-- **Import** — Bring in tasks from Excel/CSV files (including MS Project exports) or directly from Microsoft Planner, with a column-mapping screen for non-standard headers; or create a brand new project directly from an import file via the project selector dropdown. Dependencies (predecessors) are resolved to the correct tasks after import, whether referenced by row number or by title
-- **Autocomplete** — Phase and Assigned To fields suggest values already used in the project
+- **Export** — Download tasks as Excel or CSV, export a full PowerPoint project report (cover, summary, Gantt chart, and recent activity), save the Gantt as a high-resolution PNG, print or save as PDF, export milestones as an iCal (`.ics`) file, or export the Portfolio as Excel, CSV, or PowerPoint
+- **Import** — Bring in tasks from Excel/CSV files (including MS Project exports) or directly from Microsoft Planner, with a column-mapping screen for non-standard headers; or create a brand new project directly from an import file via the project selector dropdown. Dependencies (predecessors) are resolved to the correct tasks after import — by row number, by title, or MS Project style (e.g. `3FS+2d`). Date order (Month/Day/Year or Day/Month/Year) is auto-detected with a manual override, and a validation preview lets you skip rows with problems
+- **People picker** — Assigned To and Project Manager search your directory as you type, or accept free-text external people with an optional email
+- **Autocomplete** — the Phase field suggests values already used in the project
+- **Undo / Redo** — undo and redo task edits, drags, and dependent shifts (Ctrl+Z / Ctrl+Y)
+- **Working calendar** — choose working days and holidays in the web part property pane; scheduling and dependency lag respect them
+- **Baselines** — save the current plan as a baseline, then see baseline bars and finish variance on the Gantt
+- **Copy link to view** — share a link that opens the same project, view, zoom, and filters
+- **Theme and accessibility** — colors follow the site theme and high-contrast mode; roles, labels, and keyboard support throughout
 - **Archiving and Recycle Bin** — archive a project to hide it from the selector and Portfolio without deleting it, or send it to the SharePoint recycle bin (93-day recovery) when it's no longer needed
 - **Localization** — the full interface is translated into 30 languages and automatically follows each user's SharePoint display-language setting, no configuration required
-- **Concurrent-edit protection** — if two people save the same task or project at nearly the same time, the second save is rejected with a clear "changed by someone else" message instead of silently overwriting the first person's changes
-- **Keyboard and touch support** — List column headers, Kanban cards, and toolbar menus are fully keyboard-operable; Gantt bars can be dragged and resized with touch or pen input, not just a mouse
+- **Concurrent-edit protection** — if two people save the same task or project at nearly the same time, the second save is rejected with a clear "changed by someone else" message instead of silently overwriting the first person's changes. Task saves are serialized per task, and a conflict reloads the latest tasks
+- **Resilient saves** — throttled requests (429 / 503 / 504) are retried automatically with backoff
+- **Keyboard and touch support** — List column headers, Kanban cards, toolbar menus, and Gantt bars are keyboard-operable; Gantt bars can also be dragged and resized with touch or pen input, not just a mouse
 
 ---
 
@@ -43,7 +50,8 @@ A SharePoint Framework (SPFx) web part for project management with five views �
 - Responsive card grid showing all projects at a glance
 - Each card shows: project name, manager avatar, manual status badge, computed health badge, overall progress bar, task count breakdown (Done / Active / At Risk / Overdue), and a mini timeline bar with a today marker
 - Header bar shows aggregate health summary (X On Track / Y At Risk / Z Overdue) across all projects
-- Sort cards by name, health, status, or completion percentage
+- Search projects by name and optionally **hide completed / canceled** projects
+- Sort cards by name, health, status (lifecycle order), or completion percentage — your sort choice is remembered
 - Click any card to navigate directly into that project's Gantt view
 
 ### Gantt Chart
@@ -52,12 +60,17 @@ A SharePoint Framework (SPFx) web part for project management with five views �
 
 - Colored project title bar at the top of the timeline
 - Three-row toolbar: project/task actions, view/zoom controls, and the Task Filter Bar (see below)
+- Undo / Redo buttons and a **Fit** button that zooms to the whole project; Ctrl + mouse wheel also zooms
 - Sticky task list on the left; scrollable SVG timeline on the right
 - Four zoom levels: Day, Week, Month, Quarter
 - Task bars color-coded by status, priority, phase, or health; progress overlay shows % complete
-- Drag a bar horizontally to move dates; drag the right edge to resize — works with mouse, touch, or pen input
-- Dependency arrows drawn between tasks
-- Phase rows collapse/expand to group related tasks
+- Drag a bar horizontally to move dates; drag the right edge to resize — works with mouse, touch, or pen input. A live date label follows the drag and the timeline auto-scrolls near the edges; **Esc** cancels
+- Moving a task automatically shifts its dependents, with an **Undo** button
+- Drag across an empty row to create a task; drag a bar's link handle onto another task to create a dependency
+- Keyboard: focus a bar, then Left/Right moves it one working day, Shift + Left/Right changes the end date, Enter opens it
+- Dependency arrows drawn between tasks; link types FS / SS / FF / SF with lag in working days
+- **Critical path** highlight and **baseline** bars with finish variance
+- Phase rows collapse/expand to group related tasks, with Collapse all / Expand all (remembered)
 - Hover tooltip shows task name, dates, status, priority, assignee, % complete, and health indicator
 - Today line with red indicator
 - **Milestones** render as a ◆ diamond marker instead of a bar, at the task's date on the timeline:
@@ -81,7 +94,8 @@ A SharePoint Framework (SPFx) web part for project management with five views �
 - Change status or priority inline via dropdown — saves to SharePoint immediately
 - **Health** column shows an automatic On Track / At Risk / Overdue badge for each task
 - **Predecessors** column shows the names of tasks each row depends on
-- Overdue tasks highlighted in red
+- Select rows with checkboxes for bulk status, priority, % complete, assignee, or delete; **Export CSV**
+- Overdue tasks highlighted in red; non-working days marked
 - Phase group rows visually separate tasks
 - Subtasks indented under their parent
 
@@ -89,10 +103,17 @@ A SharePoint Framework (SPFx) web part for project management with five views �
 
 ![Kanban View](docs/screenshots/screenshot-kanban.png)
 
-- Five columns matching task statuses
+- Five columns matching task statuses; the Canceled column is collapsible
+- Optional **WIP limits** per column and **swimlanes** by Phase or Assignee
 - Drag cards between columns to update status
 - Cards show priority color, tags, health badge, due date, assignee avatar, and progress bar
-- Add Task button in each column
+- Add Task button in each column pre-sets that column's status
+
+### Dashboard
+
+- Status and health summary, overall progress, and phase progress (leaf tasks only; canceled tasks excluded)
+- **Burndown** chart, **Workload by Assignee**, and a **Critical Path** list
+- Overdue list (oldest first) and recent activity
 
 ### Task Panel
 
@@ -100,9 +121,9 @@ Click any task name or **+ Add Task** to open the task panel. It has three tabs:
 
 | Tab | Key fields |
 |---|---|
-| **Basic** | Name, description, dates, status, priority, % complete slider, assigned to |
+| **Basic** | Name, description, dates, status, priority, % complete slider, assigned to (people picker) |
 | **Details** | Phase (auto-colors the bar), milestone toggle, custom bar color picker, notes |
-| **Links** | Parent task (sub-task hierarchy), dependencies (removable chips + dropdown) |
+| **Links** | Parent task (sub-task hierarchy), dependencies with link type (FS / SS / FF / SF) and lag, baseline start/finish and variance |
 
 ![Task panel — Details tab](docs/screenshots/screenshot-task-panel-details.png)
 ![Task panel — Links tab](docs/screenshots/screenshot-task-panel-links.png)
@@ -122,7 +143,7 @@ Click **⚙ Options** in the toolbar (visible when a project is selected) to ope
 | **Row Height** | Compact (36px), Normal (40px), Spacious (52px) |
 | **Show / Hide** | Weekend shading, dependency arrows (with sub-options: *Critical path always visible* and *All others on hover only*), critical path highlight, progress % on bars, assignee name on bars, **health status badges** |
 
-Settings are applied live and remembered for the session.
+Settings are applied live and remembered in your browser's local storage.
 
 **Project-relative week numbers** are particularly useful for presentations — stakeholders can refer to "Week 3" without needing to know the calendar date.
 
@@ -137,6 +158,14 @@ All export options are in the **⋯ menu** (top-right of the toolbar).
 ### Export to Excel
 
 Downloads `<ProjectName> - Tasks.xlsx` with all task columns (name, phase, dates, status, priority, assignee, % complete, milestone flag, notes). Columns are auto-sized to their content.
+
+### Other exports
+
+- **Export Tasks to CSV** — `<ProjectName> - Tasks.csv` (also available from the List view), including ID, dependencies, and baseline dates
+- **Export Milestones (iCal)** — `<ProjectName> - Milestones.ics` for import into Outlook or any calendar app
+- **Print / Save as PDF** — opens the browser print dialog (allow pop-ups if blocked)
+- **Portfolio** — in Portfolio view the ⋯ menu exports Excel, CSV (`Portfolio Summary.csv`), and PowerPoint (the table paginates across slides)
+- **Copy Link** — copies a link to the current project, view, zoom, and filters
 
 ### Export to PowerPoint
 
@@ -193,7 +222,7 @@ Once a guest has been invited to the SharePoint site and granted **Site Member (
 | View projects, tasks, and all views (Portfolio, Gantt, List, Kanban, Dashboard) | ✅ |
 | Add, edit, and delete tasks | ✅ |
 | Export to Excel, PowerPoint, and PNG | ✅ (all client-side) |
-| Be assigned to tasks | ✅ (Assigned To is a plain-text field — no Azure AD lookup required) |
+| Be assigned to tasks | ✅ (type a name, with an optional email, as free text — no Azure AD lookup required) |
 | Import tasks from Excel / CSV | ✅ |
 
 ### What guests cannot do
@@ -310,7 +339,7 @@ The web part creates and manages two types of lists on the current site:
 | TaskDescription | Note | Optional description |
 | StartDate | DateTime | |
 | DueDate | DateTime | |
-| Status | Choice | Not Started / In Progress / Completed / On Hold / Cancelled |
+| Status | Choice | Not Started / In Progress / Completed / On Hold / Cancelled (stored value; displayed as "Canceled" in the English UI) |
 | Priority | Choice | Critical / High / Medium / Low |
 | PercentComplete | Number | 0–100 |
 | AssignedToName | Text | Assignee display name |
@@ -318,10 +347,14 @@ The web part creates and manages two types of lists on the current site:
 | Phase | Text | Groups tasks on the Gantt |
 | IsMilestone | Boolean | Renders as a diamond on the Gantt |
 | ParentTaskId | Number | ID of parent task (for subtask hierarchy) |
-| Dependencies | Text | Comma-separated task IDs |
+| Dependencies | Text | Comma-separated task IDs with optional link type and lag, e.g. `12,15SS+2` (a bare ID means Finish to Start, no lag) |
 | Notes | Note | Rich notes field |
 | TaskColor | Text | Hex color override (auto-colors by status if blank) |
 | SortOrder | Number | Display order |
+| BaselineStart | DateTime | Baseline start (added automatically to older lists when permitted) |
+| BaselineDue | DateTime | Baseline finish |
+
+Dates are stored at 10:00 UTC so a task's calendar day is the same in every time zone.
 
 ---
 
@@ -341,7 +374,9 @@ The web part creates and manages two types of lists on the current site:
 3. Common column names are auto-mapped (e.g. "Owner" → Assigned To, "Finish" → Due Date)
 4. Unrecognized columns appear in the column mapper — assign each to a Smart Gantt field or mark as Skip
 5. A preview shows the first 3 rows with mapped values
-6. Click **Import** to create all tasks
+6. Pick the **date order** (auto-detected; override with Month/Day/Year or Day/Month/Year) — it applies to dates written with numbers such as 03/04/2026
+7. A validation preview lists rows with problems (missing name, invalid or reversed dates); tick **Skip rows with problems** to leave them out
+8. Click **Import** to create all tasks; any dependency warnings are listed afterward
 
 **Microsoft Project Desktop:** Use File → Save As → Excel Workbook (.xlsx) in Project, then import that file. All standard Project columns are recognized automatically.
 
@@ -449,11 +484,14 @@ Microsoft Graph is accessed via the SPFx built-in `msGraphClientFactory` — no 
 
 ## Configuration
 
-The web part has one property pane setting:
+The web part property pane has these settings:
 
 | Property | Default | Description |
 |---|---|---|
 | Title | Smart Gantt Chart | Web part display title |
+| Default view | Gantt | View shown first (Gantt, List, Kanban, Dashboard, or Portfolio). A viewer's remembered choice or a shared link takes priority |
+| Default zoom | Week | Gantt zoom shown first (Day, Week, Month, or Quarter) |
+| Working calendar | Mon–Fri | Toggle each weekday as a working day, and list holidays (one `yyyy-MM-dd` date per line) |
 
 All other configuration (projects, tasks, colors, display settings) is managed through the web part UI itself.
 
@@ -482,7 +520,6 @@ All other configuration (projects, tasks, colors, display settings) is managed t
 - **MS Project Desktop (.mpp files)** — the binary `.mpp` format cannot be parsed in a browser. Use File → Save As → Excel in Project Desktop instead.
 - **Planner import** requires admin approval of Graph permissions (one-time setup).
 - **Display settings** persist to browser local storage per web part instance, not the web part property bag — they won't follow you to a different browser or carry over if local storage is cleared. Future work could persist them to the property bag instead.
-- **Gantt bars** cannot be moved or resized from the keyboard yet — dragging/resizing requires a mouse, touch, or pen. Use the task panel (reachable via the keyboard-accessible **Edit** button) to change dates instead.
 - The web part requires **Site Owner** permissions on the SharePoint site for the first project creation (list creation). Subsequent task operations work with Site Member permissions.
 - **Guest users** cannot create projects (list creation requires elevated permissions), but can fully manage tasks in existing projects. See [External / Guest User Access](#external--guest-user-access) for setup instructions.
 - **Portfolio view** loads task stats for all projects in parallel on first visit. For portfolios with 30+ projects this may take a few seconds; a spinner is shown while loading.

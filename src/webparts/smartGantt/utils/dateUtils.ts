@@ -1,7 +1,7 @@
 import { format } from 'date-fns';
 
 // Schedule dates (task/project start and due) are calendar days, not instants.
-// SharePoint stores them as UTC-midnight DateTimes; the service layer normalizes
+// SharePoint stores them as DateTimes at 10:00 UTC (legacy: UTC midnight); the service layer normalizes
 // everything to 'YYYY-MM-DD' strings, and components parse those as *local*
 // dates so the displayed day never shifts with the viewer's timezone.
 // Created/Modified timestamps are real instants and must NOT go through these
@@ -14,10 +14,13 @@ export function toDateOnly(value: string | null | undefined): string {
   if (DATE_ONLY_RE.test(value)) return value;
   const d = new Date(value);
   if (isNaN(d.getTime())) return '';
-  // Read the UTC parts: current data is written as UTC midnight. Legacy values
-  // written as local midnight land within ±12h of the intended day, so rolling
-  // forward when the UTC time is past noon recovers the intended calendar day
-  // for writers on either side of UTC.
+  // Read the UTC parts. Current data is written as 10:00 UTC (see toSPDate in
+  // SharePointService), which lands on the same calendar day in site time zones
+  // from UTC-10 to UTC+13; older data was written as UTC midnight, which reads
+  // back as the same day too. Legacy values written as local midnight land
+  // within ±12h of the intended day, so rolling forward when the UTC time is
+  // at or past noon recovers the intended calendar day for writers on either
+  // side of UTC.
   let y = d.getUTCFullYear();
   let m = d.getUTCMonth();
   let day = d.getUTCDate();

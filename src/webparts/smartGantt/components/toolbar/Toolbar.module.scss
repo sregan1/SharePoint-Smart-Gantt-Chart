@@ -1,8 +1,8 @@
 .toolbar {
   display: flex;
   flex-direction: column;
-  background: #F3F2F1;
-  border-bottom: 2px solid #EDEBE9;
+  background: var(--neutralLighter, #F3F2F1);
+  border-bottom: 2px solid var(--neutralLight, #EDEBE9);
   font-family: 'Segoe UI', sans-serif;
 }
 
@@ -12,7 +12,7 @@
   align-items: center;
   gap: 8px;
   padding: 6px 16px;
-  border-bottom: 1px solid #EDEBE9;
+  border-bottom: 1px solid var(--neutralLight, #EDEBE9);
   min-height: 48px;
   flex-wrap: nowrap;
 }
@@ -61,7 +61,7 @@
   display: flex;
   align-items: center;
   padding: 4px 16px 8px;
-  border-top: 1px solid #EDEBE9;
+  border-top: 1px solid var(--neutralLight, #EDEBE9);
   min-height: 36px;
 }
 
@@ -69,7 +69,7 @@
 .divider {
   width: 1px;
   height: 22px;
-  background: #C8C6C4;
+  background: var(--neutralTertiaryAlt, #C8C6C4);
   margin: 0 2px;
   flex-shrink: 0;
 }
@@ -79,8 +79,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  background: #ffffff;
-  border: 1px solid #C8C6C4;
+  background: var(--white, #ffffff);
+  border: 1px solid var(--neutralTertiaryAlt, #C8C6C4);
   border-radius: 4px;
   padding: 5px 10px;
   cursor: pointer;
@@ -90,7 +90,7 @@
   flex-shrink: 1;
   overflow: hidden;
 
-  &:hover { border-color: #0078D4; }
+  &:hover { border-color: var(--themePrimary, #0078D4); }
 }
 
 .projectDot {
@@ -103,7 +103,7 @@
 .projectName {
   font-size: 14px;
   font-weight: 600;
-  color: #323130;
+  color: var(--neutralPrimary, #323130);
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -111,7 +111,7 @@
 }
 
 .chevron {
-  color: #605E5C;
+  color: var(--neutralSecondary, #605E5C);
   font-size: 10px;
   flex-shrink: 0;
 }
@@ -132,16 +132,16 @@
   flex-shrink: 0;
 
   &.primary {
-    background: #0078D4;
-    color: #ffffff;
-    &:hover { background: #106EBE; }
+    background: var(--themePrimary, #0078D4);
+    color: var(--white, #ffffff);
+    &:hover { background: var(--themeDark, #106EBE); }
   }
 
   &.secondary {
-    background: #ffffff;
-    color: #323130;
-    border: 1px solid #C8C6C4;
-    &:hover { background: #F3F2F1; border-color: #8A8886; }
+    background: var(--white, #ffffff);
+    color: var(--neutralPrimary, #323130);
+    border: 1px solid var(--neutralTertiaryAlt, #C8C6C4);
+    &:hover { background: var(--neutralLighter, #F3F2F1); border-color: var(--neutralTertiary, #8A8886); }
   }
 }
 
@@ -151,23 +151,23 @@
   justify-content: center;
   width: 30px;
   height: 30px;
-  background: #ffffff;
-  border: 1px solid #C8C6C4;
+  background: var(--white, #ffffff);
+  border: 1px solid var(--neutralTertiaryAlt, #C8C6C4);
   border-radius: 4px;
   cursor: pointer;
-  color: #605E5C;
+  color: var(--neutralSecondary, #605E5C);
   font-size: 15px;
   transition: all 0.1s;
   flex-shrink: 0;
 
-  &:hover { background: #F3F2F1; border-color: #8A8886; color: #323130; }
+  &:hover { background: var(--neutralLighter, #F3F2F1); border-color: var(--neutralTertiary, #8A8886); color: var(--neutralPrimary, #323130); }
 }
 
 /* ── View switcher ───────────────────────────────────────────────────────────  */
 .viewSwitcher {
   display: flex;
-  background: #ffffff;
-  border: 1px solid #C8C6C4;
+  background: var(--white, #ffffff);
+  border: 1px solid var(--neutralTertiaryAlt, #C8C6C4);
   border-radius: 4px;
   overflow: hidden;
   flex-shrink: 0;
@@ -180,24 +180,24 @@
   padding: 4px 11px;
   font-size: 12px;
   font-weight: 500;
-  color: #605E5C;
+  color: var(--neutralSecondary, #605E5C);
   background: transparent;
   border: none;
   cursor: pointer;
   transition: background 0.1s, color 0.1s;
   white-space: nowrap;
 
-  &:not(:last-child) { border-right: 1px solid #C8C6C4; }
-  &:hover { background: #F3F2F1; color: #323130; }
-  &.active { background: #0078D4; color: #ffffff; }
+  &:not(:last-child) { border-right: 1px solid var(--neutralTertiaryAlt, #C8C6C4); }
+  &:hover { background: var(--neutralLighter, #F3F2F1); color: var(--neutralPrimary, #323130); }
+  &.active { background: var(--themePrimary, #0078D4); color: var(--white, #ffffff); }
 }
 
 /* ── Zoom buttons ────────────────────────────────────────────────────────────  */
 .zoomGroup {
   display: flex;
   align-items: center;
-  background: #ffffff;
-  border: 1px solid #C8C6C4;
+  background: var(--white, #ffffff);
+  border: 1px solid var(--neutralTertiaryAlt, #C8C6C4);
   border-radius: 4px;
   overflow: hidden;
   flex-shrink: 0;
@@ -207,16 +207,16 @@
   padding: 4px 9px;
   font-size: 12px;
   font-weight: 500;
-  color: #605E5C;
+  color: var(--neutralSecondary, #605E5C);
   background: transparent;
   border: none;
   cursor: pointer;
   transition: all 0.1s;
   white-space: nowrap;
 
-  &:not(:last-child) { border-right: 1px solid #EDEBE9; }
-  &:hover { background: #F3F2F1; color: #323130; }
-  &.active { background: #EFF6FC; color: #0078D4; font-weight: 700; }
+  &:not(:last-child) { border-right: 1px solid var(--neutralLight, #EDEBE9); }
+  &:hover { background: var(--neutralLighter, #F3F2F1); color: var(--neutralPrimary, #323130); }
+  &.active { background: var(--themeLighter, #EFF6FC); color: var(--themePrimary, #0078D4); font-weight: 700; }
 }
 
 .todayBtn {
@@ -226,15 +226,15 @@
   padding: 4px 10px;
   font-size: 12px;
   font-weight: 500;
-  color: #605E5C;
-  background: #ffffff;
-  border: 1px solid #C8C6C4;
+  color: var(--neutralSecondary, #605E5C);
+  background: var(--white, #ffffff);
+  border: 1px solid var(--neutralTertiaryAlt, #C8C6C4);
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.1s;
   flex-shrink: 0;
 
-  &:hover { border-color: #D13438; color: #D13438; }
+  &:hover { border-color: var(--sg-critical, #D13438); color: var(--sg-critical, #D13438); }
 }
 
 .settingsBtn {
@@ -244,16 +244,16 @@
   padding: 4px 10px;
   font-size: 12px;
   font-weight: 500;
-  color: #605E5C;
-  background: #ffffff;
-  border: 1px solid #C8C6C4;
+  color: var(--neutralSecondary, #605E5C);
+  background: var(--white, #ffffff);
+  border: 1px solid var(--neutralTertiaryAlt, #C8C6C4);
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.1s;
   flex-shrink: 0;
 
-  &:hover { border-color: #0078D4; color: #0078D4; }
-  &.active { background: #EFF6FC; border-color: #0078D4; color: #0078D4; }
+  &:hover { border-color: var(--themePrimary, #0078D4); color: var(--themePrimary, #0078D4); }
+  &.active { background: var(--themeLighter, #EFF6FC); border-color: var(--themePrimary, #0078D4); color: var(--themePrimary, #0078D4); }
 }
 
 /* ── Callouts / dropdowns ────────────────────────────────────────────────────  */
@@ -264,14 +264,14 @@
   padding: 8px 16px;
   cursor: pointer;
   font-size: 13px;
-  color: #323130;
+  color: var(--neutralPrimary, #323130);
   transition: background 0.1s;
   white-space: nowrap;
 
-  &:hover { background: #F3F2F1; }
-  &.selected { background: #EFF6FC; }
-  &.danger { color: #D13438; }
-  &.danger:hover { background: #FDF3F4; }
+  &:hover { background: var(--neutralLighter, #F3F2F1); }
+  &.selected { background: var(--themeLighter, #EFF6FC); }
+  &.danger { color: var(--sg-critical, #D13438); }
+  &.danger:hover { background: var(--sg-danger-bg, #FDF3F4); }
 }
 
 .calloutDot {
@@ -283,6 +283,56 @@
 
 .calloutSeparator {
   height: 1px;
-  background: #EDEBE9;
+  background: var(--neutralLight, #EDEBE9);
   margin: 4px 0;
+}
+
+.iconBtn:disabled, .todayBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.todayBtn.active {
+  background: var(--themeLighter, #EFF6FC);
+  border-color: var(--themePrimary, #0078D4);
+  color: var(--themePrimary, #0078D4);
+}
+
+.todayBtn:focus-visible,
+.iconBtn:focus-visible,
+.zoomBtn:focus-visible,
+.viewBtn:focus-visible,
+.settingsBtn:focus-visible,
+.actionBtn:focus-visible,
+.projectSelector:focus-visible {
+  outline: 2px solid var(--themePrimary, #0078D4);
+  outline-offset: 1px;
+}
+
+/* ── Windows high contrast / forced colors ───────────────────────────────── */
+@media (forced-colors: active) {
+  .viewBtn.active,
+  .zoomBtn.active,
+  .todayBtn.active,
+  .settingsBtn.active,
+  .actionBtn.primary {
+    forced-color-adjust: none;
+    background: Highlight;
+    color: HighlightText;
+    border-color: Highlight;
+  }
+  .projectSelector,
+  .iconBtn,
+  .viewSwitcher,
+  .zoomGroup,
+  .todayBtn,
+  .settingsBtn,
+  .actionBtn.secondary {
+    border-color: CanvasText;
+  }
+  .calloutItem.selected {
+    forced-color-adjust: none;
+    background: Highlight;
+    color: HighlightText;
+  }
 }

@@ -14,35 +14,35 @@ table {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
-  color: #323130;
+  color: var(--neutralPrimary, #323130);
 }
 
 .thead {
   position: sticky;
   top: 0;
   z-index: 2;
-  background: #F3F2F1;
+  background: var(--neutralLighter, #F3F2F1);
 
   th {
     padding: 10px 12px;
     text-align: left;
     font-size: 11px;
     font-weight: 600;
-    color: #605E5C;
+    color: var(--neutralSecondary, #605E5C);
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    border-bottom: 2px solid #EDEBE9;
+    border-bottom: 2px solid var(--neutralLight, #EDEBE9);
     white-space: nowrap;
     user-select: none;
     cursor: pointer;
     transition: background 0.1s;
 
     &:hover {
-      background: #EDEBE9;
+      background: var(--neutralLight, #EDEBE9);
     }
 
     &.sorted {
-      color: #0078D4;
+      color: var(--themePrimary, #0078D4);
     }
 
     .sortArrow {
@@ -54,22 +54,30 @@ table {
 
 .tbody {
   tr {
-    border-bottom: 1px solid #F3F2F1;
+    border-bottom: 1px solid var(--neutralLighter, #F3F2F1);
     transition: background 0.1s;
 
     &:hover {
-      background: #F8F7F6;
+      background: var(--neutralLighterAlt, #F8F7F6);
 
       .rowActions {
         opacity: 1;
       }
     }
 
+    &:focus-within .rowActions {
+      opacity: 1;
+    }
+
+    &.selectedRow {
+      background: var(--themeLighterAlt, #EFF6FC);
+    }
+
     &.phaseGroupRow {
-      background: #F3F2F1;
+      background: var(--neutralLighter, #F3F2F1);
 
       &:hover {
-        background: #EDEBE9;
+        background: var(--neutralLight, #EDEBE9);
       }
     }
   }
@@ -115,7 +123,7 @@ table {
 .phaseGroupCell {
   font-size: 12px;
   font-weight: 600;
-  color: #605E5C;
+  color: var(--neutralSecondary, #605E5C);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -144,7 +152,7 @@ table {
 .progressBar {
   width: 80px;
   height: 6px;
-  background: #EDEBE9;
+  background: var(--neutralLight, #EDEBE9);
   border-radius: 3px;
   overflow: hidden;
   position: relative;
@@ -158,7 +166,7 @@ table {
 
 .progressLabel {
   font-size: 11px;
-  color: #605E5C;
+  color: var(--neutralSecondary, #605E5C);
   min-width: 30px;
   text-align: right;
 }
@@ -171,7 +179,7 @@ table {
 
 .dateCell {
   font-size: 12px;
-  color: #323130;
+  color: var(--neutralPrimary, #323130);
   white-space: nowrap;
 }
 
@@ -217,13 +225,13 @@ table {
   align-items: center;
   justify-content: center;
   font-size: 13px;
-  color: #605E5C;
+  color: var(--neutralSecondary, #605E5C);
   padding: 0;
   transition: all 0.1s;
 
   &:hover {
-    background: #EDEBE9;
-    color: #323130;
+    background: var(--neutralLight, #EDEBE9);
+    color: var(--neutralPrimary, #323130);
   }
 
   &.deleteBtn:hover {
@@ -238,17 +246,17 @@ table {
   gap: 6px;
   padding: 10px 16px;
   font-size: 13px;
-  color: #0078D4;
+  color: var(--themePrimary, #0078D4);
   cursor: pointer;
   border: none;
   background: transparent;
   width: 100%;
   text-align: left;
-  border-bottom: 1px solid #F3F2F1;
+  border-bottom: 1px solid var(--neutralLighter, #F3F2F1);
   transition: background 0.1s;
 
   &:hover {
-    background: #EFF6FC;
+    background: var(--themeLighterAlt, #EFF6FC);
   }
 }
 
@@ -265,8 +273,8 @@ table {
   -webkit-appearance: none;
 
   &:hover, &:focus {
-    border-color: #C8C6C4;
-    background: #fff;
+    border-color: var(--neutralQuaternary, #C8C6C4);
+    background: var(--white, #fff);
   }
 }
 
@@ -279,5 +287,72 @@ table {
   gap: 12px;
   padding: 60px;
   text-align: center;
-  color: #605E5C;
+  color: var(--neutralSecondary, #605E5C);
+}
+
+// ── Toolbar / bulk actions ───────────────────────────────────────────────────
+.listToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 6px 12px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--neutralLight, #EDEBE9);
+  background: var(--neutralLighterAlt, #FAF9F8);
+}
+
+.toolbarBtn {
+  border: 1px solid var(--neutralQuaternary, #C8C6C4);
+  background: var(--white, #fff);
+  color: var(--neutralPrimary, #323130);
+  border-radius: 3px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+
+  &:hover:not(:disabled) { background: var(--neutralLighter, #F3F2F1); }
+  &:focus-visible { outline: 2px solid var(--themePrimary, #0078D4); }
+  &.danger { color: #A4262C; border-color: #A4262C; }
+}
+
+.bulkBar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  flex-shrink: 0;
+  background: var(--themeLighterAlt, #EFF6FC);
+  border-bottom: 1px solid var(--neutralLight, #EDEBE9);
+  font-size: 12px;
+}
+
+.bulkCount { font-weight: 600; color: var(--themePrimary, #0078D4); margin-right: 4px; }
+
+.bulkControl {
+  border: 1px solid var(--neutralQuaternary, #C8C6C4);
+  background: var(--white, #fff);
+  color: var(--neutralPrimary, #323130);
+  border-radius: 3px;
+  padding: 3px 6px;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.checkCol {
+  width: 36px;
+  text-align: center;
+
+  input { cursor: pointer; }
+}
+
+.nonWorking {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+@media (forced-colors: active) {
+  .tbody tr.selectedRow { outline: 2px solid Highlight; outline-offset: -2px; }
+  .progressFill, .statusDot { forced-color-adjust: none; }
 }

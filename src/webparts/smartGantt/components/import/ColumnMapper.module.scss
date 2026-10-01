@@ -10,15 +10,15 @@
   gap: 8px;
   align-items: center;
   padding: 8px 12px;
-  background: #F3F2F1;
-  border-bottom: 1px solid #EDEBE9;
+  background: var(--neutralLighter, #F3F2F1);
+  border-bottom: 1px solid var(--neutralLight, #EDEBE9);
   border-radius: 4px 4px 0 0;
 }
 
 .mapperHeaderLabel {
   font-size: 11px;
   font-weight: 600;
-  color: #605E5C;
+  color: var(--neutralSecondary, #605E5C);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -29,7 +29,7 @@
   gap: 8px;
   align-items: center;
   padding: 6px 12px;
-  border-bottom: 1px solid #F3F2F1;
+  border-bottom: 1px solid var(--neutralLighter, #F3F2F1);
   transition: background 0.1s;
 
   &:hover {
@@ -51,7 +51,7 @@
 
 .sourceCol {
   font-size: 13px;
-  color: #323130;
+  color: var(--neutralPrimary, #323130);
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -60,25 +60,25 @@
 
 .arrow {
   font-size: 14px;
-  color: #C8C6C4;
+  color: var(--neutralQuaternary, #C8C6C4);
   text-align: center;
 }
 
 .targetSelect {
   width: 100%;
-  border: 1px solid #C8C6C4;
+  border: 1px solid var(--neutralQuaternary, #C8C6C4);
   border-radius: 4px;
   padding: 4px 8px;
   font-size: 12px;
   font-family: 'Segoe UI', sans-serif;
-  color: #323130;
-  background: #fff;
+  color: var(--neutralPrimary, #323130);
+  background: var(--white, #fff);
   outline: none;
   cursor: pointer;
   transition: border-color 0.1s;
 
   &:focus {
-    border-color: #0078D4;
+    border-color: var(--themePrimary, #0078D4);
   }
 }
 
@@ -94,7 +94,7 @@
 
 .skippedBadge {
   font-size: 11px;
-  color: #A19F9D;
+  color: var(--neutralTertiary, #A19F9D);
   white-space: nowrap;
 }
 
@@ -106,7 +106,7 @@
 .previewTitle {
   font-size: 12px;
   font-weight: 600;
-  color: #605E5C;
+  color: var(--neutralSecondary, #605E5C);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 8px;
@@ -118,13 +118,13 @@
   font-size: 12px;
 
   th {
-    background: #F3F2F1;
+    background: var(--neutralLighter, #F3F2F1);
     padding: 6px 10px;
     text-align: left;
     font-size: 11px;
     font-weight: 600;
-    color: #605E5C;
-    border-bottom: 1px solid #EDEBE9;
+    color: var(--neutralSecondary, #605E5C);
+    border-bottom: 1px solid var(--neutralLight, #EDEBE9);
     white-space: nowrap;
     max-width: 150px;
     overflow: hidden;
@@ -133,8 +133,8 @@
 
   td {
     padding: 5px 10px;
-    border-bottom: 1px solid #F3F2F1;
-    color: #323130;
+    border-bottom: 1px solid var(--neutralLighter, #F3F2F1);
+    color: var(--neutralPrimary, #323130);
     max-width: 150px;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -156,7 +156,7 @@
   padding: 10px 14px;
   margin-bottom: 12px;
   font-size: 13px;
-  color: #323130;
+  color: var(--neutralPrimary, #323130);
 
   .warningIcon {
     color: #CA5010;
@@ -169,17 +169,22 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  background: #EFF6FC;
+  background: var(--themeLighterAlt, #EFF6FC);
   border: 1px solid #90C8F6;
   border-radius: 4px;
   padding: 10px 14px;
   margin-bottom: 12px;
   font-size: 13px;
-  color: #323130;
+  color: var(--neutralPrimary, #323130);
 
   .infoIcon {
-    color: #0078D4;
+    color: var(--themePrimary, #0078D4);
     font-size: 16px;
     flex-shrink: 0;
   }
+}
+
+@media (forced-colors: active) {
+  .mapperRow { border-bottom: 1px solid CanvasText; }
+  .targetSelect { border: 1px solid CanvasText; }
 }

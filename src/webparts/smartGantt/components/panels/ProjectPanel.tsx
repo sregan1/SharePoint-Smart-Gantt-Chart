@@ -7,6 +7,7 @@ import {
 import { IProject, PROJECT_COLORS, PROJECT_STATUS_OPTIONS, ProjectStatus } from '../../models';
 import { toDateOnly } from '../../utils/dateUtils';
 import { ColorSwatchPicker } from '../common/ColorSwatchPicker';
+import { PeoplePicker, IPeopleSearchProvider, isValidEmail } from '../common/PeoplePicker';
 import * as strings from 'SmartGanttWebPartStrings';
 
 interface IProjectPanelProps {
@@ -14,9 +15,14 @@ interface IProjectPanelProps {
   project: IProject | null;
   onSave: (data: Partial<IProject>) => Promise<void>;
   onDismiss: () => void;
+  /** Directory search for the project manager picker. Without it the picker
+   *  falls back to suggestions from `knownUsers` only. */
+  spService?: IPeopleSearchProvider;
+  /** Names offered as suggestions in the project manager picker. */
+  knownUsers?: string[];
 }
 
-export const ProjectPanel: React.FC<IProjectPanelProps> = ({ isOpen, project, onSave, onDismiss }) => {
+export const ProjectPanel: React.FC<IProjectPanelProps> = ({ isOpen, project, onSave, onDismiss, spService, knownUsers }) => {
   const isEdit = !!project;
 
   const [title, setTitle] = React.useState('');
@@ -25,6 +31,9 @@ export const ProjectPanel: React.FC<IProjectPanelProps> = ({ isOpen, project, on
   const [startDate, setStartDate] = React.useState('');
   const [dueDate, setDueDate] = React.useState('');
   const [status, setStatus] = React.useState<ProjectStatus>('Active');
+  // Project manager is stored as free text plus an optional email, like task assignees.
+  const [manager, setManager] = React.useState('');
+  const [managerEmail, setManagerEmail] = React.useState('');
   const [saving, setSaving] = React.useState(false);
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [saveError, setSaveError] = React.useState('');
@@ -40,6 +49,8 @@ export const ProjectPanel: React.FC<IProjectPanelProps> = ({ isOpen, project, on
         setStartDate(toDateOnly(project.startDate));
         setDueDate(toDateOnly(project.dueDate));
         setStatus(project.status);
+        setManager(project.projectManager || '');
+        setManagerEmail(project.projectManagerEmail || '');
       } else {
         setTitle('');
         setDescription('');
@@ -47,6 +58,8 @@ export const ProjectPanel: React.FC<IProjectPanelProps> = ({ isOpen, project, on
         setStartDate('');
         setDueDate('');
         setStatus('Active');
+        setManager('');
+        setManagerEmail('');
       }
       setErrors({});
       setSaveError('');
@@ -59,6 +72,8 @@ export const ProjectPanel: React.FC<IProjectPanelProps> = ({ isOpen, project, on
     const errs: Record<string, string> = {};
     if (!title.trim()) errs.title = strings.ProjectPanel_ProjectNameRequired;
     if (dueDate && startDate && dueDate < startDate) errs.dueDate = strings.ProjectPanel_DueDateError;
+    // The picker shows the message inline under its email field.
+    if (!isValidEmail(managerEmail)) errs.manager = strings.Common_PeoplePicker_InvalidEmail;
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -75,6 +90,8 @@ export const ProjectPanel: React.FC<IProjectPanelProps> = ({ isOpen, project, on
         startDate,
         dueDate,
         status,
+        projectManager: manager.trim(),
+        projectManagerEmail: managerEmail.trim(),
         etag: project?.etag,
       });
     } catch (e) {
@@ -97,6 +114,10 @@ export const ProjectPanel: React.FC<IProjectPanelProps> = ({ isOpen, project, on
     'Cancelled': strings.ProjectStatus_Cancelled,
   };
   const statusOptions: IDropdownOption[] = PROJECT_STATUS_OPTIONS.map(s => ({ key: s, text: statusLabels[s] }));
+  const recentPeople = React.useMemo(
+    () => (knownUsers || []).map(n => ({ name: n, email: '' })),
+    [knownUsers],
+  );
 
   return (
     <Panel
@@ -160,8 +181,21 @@ export const ProjectPanel: React.FC<IProjectPanelProps> = ({ isOpen, project, on
             value={color}
             onChange={c => { setColor(c); setDirty(true); }}
             size={30}
+            ariaLabel={strings.ProjectPanel_ProjectColorLabel}
           />
         </div>
+
+        {/* Project manager */}
+        <PeoplePicker
+          key={project ? `p${project.id}` : 'new'}
+          label={strings.Panel_Project_ManagerLabel}
+          name={manager}
+          email={managerEmail}
+          onChange={(n, e) => { setManager(n); setManagerEmail(e); setDirty(true); }}
+          recent={recentPeople}
+          spService={spService}
+          placeholder={strings.Panel_Project_ManagerPlaceholder}
+        />
 
         {/* Status */}
         <Dropdown
@@ -205,14 +239,14 @@ export const ProjectPanel: React.FC<IProjectPanelProps> = ({ isOpen, project, on
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{ width: 12, height: 12, borderRadius: '50%', background: color }} />
-              <span style={{ fontWeight: 600, fontSize: 14, color: '#323130' }}>{title}</span>
+              <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--neutralPrimary, #323130)' }}>{title}</span>
               <span style={{ fontSize: 11, color: color, fontWeight: 600, marginLeft: 'auto',
                 background: `${color}20`, padding: '2px 8px', borderRadius: 10 }}>
                 {statusLabels[status]}
               </span>
             </div>
             {description && (
-              <p style={{ margin: '6px 0 0', fontSize: 12, color: '#605E5C', lineHeight: 1.5 }}>
+              <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--neutralSecondary, #605E5C)', lineHeight: 1.5 }}>
                 {description}
               </p>
             )}
@@ -221,8 +255,8 @@ export const ProjectPanel: React.FC<IProjectPanelProps> = ({ isOpen, project, on
 
         {!isEdit && (
           <div style={{
-            background: '#F3F2F1', borderRadius: 4, padding: '10px 12px',
-            fontSize: 12, color: '#605E5C', lineHeight: 1.6,
+            background: 'var(--neutralLighter, #F3F2F1)', borderRadius: 4, padding: '10px 12px',
+            fontSize: 12, color: 'var(--neutralSecondary, #605E5C)', lineHeight: 1.6,
           }}>
             <strong>{strings.ProjectPanel_WhatHappensNextTitle}</strong> {strings.ProjectPanel_WhatHappensNextBody}
           </div>

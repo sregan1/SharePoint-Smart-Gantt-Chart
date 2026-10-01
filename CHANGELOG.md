@@ -11,6 +11,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.5.0] - 2026-10-01
+
+### Added
+
+- **Copy import errors** — the error and warning lists on the import results screen are now selectable and have a **Copy details** button
+- **People picker for Assigned To and Project Manager** — search your directory as you type, pick from recently used people, or enter a free-text name (with an optional email) for external people who aren't in the directory
+- **Dependency types and lag** — links can now be Finish to Start (FS), Start to Start (SS), Finish to Finish (FF), or Start to Finish (SF), each with a lag or lead in working days. Set them in the task panel's Links tab; they're stored in the `Dependencies` column in a compact form such as `12,15SS+2` (plain IDs still mean FS with no lag)
+- **Auto-shift dependents** — moving or resizing a task moves the tasks that depend on it to keep the link satisfied. A message reports how many dependents moved, with an **Undo** button
+- **Undo / Redo** — toolbar buttons and Ctrl+Z / Ctrl+Y for task edits, drags, and dependent shifts (last 50 changes)
+- **Working calendar** — new web part property pane group to choose which weekdays are working days and to list holidays (one `yyyy-MM-dd` date per line). Scheduling, keyboard moves, and dependency lag use it, and non-working days are marked in List view
+- **Default view and default zoom** — new property pane settings for the view and Gantt zoom a viewer sees first (a viewer's own remembered choice or a shared link still takes priority)
+- **Baselines** — **Set Baseline…** saves every task's current dates; the Gantt then shows baseline bars, and the tooltip and task panel show the finish variance versus baseline. The `BaselineStart` and `BaselineDue` columns are added to existing task lists automatically when you have permission to edit the list
+- **Gantt interactions**:
+  - Live date label while dragging, with auto-scroll when you drag near the edge of the timeline
+  - Drag across an empty row to create a task with those dates
+  - Drag from a bar's link handle onto another task to create a dependency (circular and duplicate links are rejected)
+  - Move and resize bars from the keyboard: focus a bar, then Left/Right arrows move it one working day; Shift + Left/Right changes the end date; Enter opens the task
+  - **Collapse all / Expand all phases** buttons; collapsed phases are remembered per project
+  - **Fit** button to zoom to the whole project, and Ctrl + mouse wheel to zoom
+  - Critical path highlight and critical path list on the Dashboard
+- **Copy Link** — copies a link to the current view that includes the project, view, zoom level, and active filters
+- **Print / Save as PDF** — from the ⋯ menu
+- **CSV and calendar exports** — Export Tasks to CSV (⋯ menu and List view), Portfolio summary CSV, and Export Milestones as an iCal (`.ics`) file
+- **Kanban board**:
+  - Work-in-progress (WIP) limits per column, with a warning when a column is over its limit
+  - Swimlanes by Phase or Assignee
+  - Collapsible Canceled column
+  - **Add Task** in a column pre-sets that column's status
+- **List view** — checkbox selection with bulk set status, priority, % complete, assignee, and bulk delete
+- **Dashboard** — Burndown chart, Workload by Assignee (open and overdue counts), and a Critical Path list
+- **Portfolio view** — search box, **Hide completed / canceled** toggle, and a remembered sort order
+- **Import** — date-order picker (Auto-detect, Month/Day/Year, or Day/Month/Year), required-field markers in the column mapper, and a row validation preview that lists rows with problems (missing name, invalid or reversed dates) with an option to skip them
+- **Theme and accessibility** — colors follow the SharePoint site theme and high-contrast mode; added roles, labels, keyboard access, and screen-reader announcements across the Gantt, Kanban, List, Dashboard, Portfolio, and import screens
+- **Performance** — the Gantt windows its rows (only visible rows are rendered) and memoizes bars, so large projects scroll and drag more smoothly
+- All new text is translated into all 30 supported languages
+
+### Changed
+
+- **"Cancelled" now reads "Canceled"** in the English interface (Status, Kanban column, Dashboard, and project status). The stored value is unchanged, so existing data, filters, and exports keep working
+- Dependency parsing on import understands MS Project-style predecessors such as `3FS+2d`
+- **Dashboard and phase progress** now count leaf tasks only (parents with sub-tasks are excluded) and ignore canceled tasks; the overdue list is sorted oldest first
+- **Portfolio "Status" sort** now follows lifecycle order (Planning, Active, On Hold, Completed, Canceled) instead of alphabetical
+- Several hard-coded English strings are now localized
+- Dates are stored at 10:00 UTC so a task's calendar day is the same in every time zone (existing UTC-midnight dates are still read correctly)
+
+### Fixed
+
+- **New-project column creation** — a column that SharePoint rejects is now named in the error message; the Dependencies column falls back to a multi-line text column if single-line text rejects its length, ParentTaskId falls back to a non-indexed column, and the optional baseline columns no longer block project creation
+- **Concurrent-edit protection now works for tasks** — task saves previously always sent `If-Match: *`, so the 1.3.0 conflict check never fired. Saves now carry the real concurrency token and are serialized per task; on a conflict you see a message and the latest tasks are reloaded
+- Throttled requests (HTTP 429, 503, and 504) are now retried with backoff instead of failing
+- Filter chips are no longer undone by a search that was still pending, and filters reset whenever you change project
+- The Gantt no longer jumps after dragging a bar past the left edge
+- Dragging only starts with the primary mouse button, and **Esc** cancels a drag
+- Tasks in a circular parent chain now appear at the top level with a warning instead of disappearing
+- Kanban: pressing Enter or the arrow keys on a card's Edit or Delete button no longer also triggers the card's own actions
+- Task panel: changing status or dependencies now marks the form as changed, so it prompts before discarding
+- Import: dependency warnings are now shown; numeric dependencies map by the row's original spreadsheet position; and dates no longer come out one day early in UTC+13/+14 time zones
+- Portfolio figures refresh after task and project edits
+- Portfolio Excel export includes the header row when there are no projects, and the Portfolio PowerPoint table now paginates across slides
+- Exports validate colors, so a malformed color no longer breaks the file
+- Deleting a project removes its task list before its registry entry, so a failure can't leave an orphaned entry
+- Project creation rolls back if a column fails to be created
+- The archived-field check no longer swallows unrelated errors
+
+---
+
 ## [1.4.0] - 2026-09-28
 
 ### Added

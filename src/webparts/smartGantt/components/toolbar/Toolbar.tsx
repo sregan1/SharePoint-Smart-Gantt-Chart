@@ -32,7 +32,8 @@ interface IToolbarProps {
   projects: IProject[];
   selectedProject: IProject | null;
   viewMode: ViewMode;
-  zoomLevel: ZoomLevel;
+  /** Null while a custom (fit / Ctrl+wheel) zoom is active — no preset is highlighted. */
+  zoomLevel: ZoomLevel | null;
   ganttSettings: IGanttDisplaySettings;
   onSelectProject: (project: IProject) => void;
   onViewChange: (view: ViewMode) => void;
@@ -52,6 +53,16 @@ interface IToolbarProps {
   onExportExcel: () => void;
   onExportImage: () => void;
   onExportPowerPoint: () => void;
+  onExportCsv: () => void;
+  onExportIcs: () => void;
+  onPrint: () => void;
+  onSetBaseline: () => void;
+  onCopyLink: () => void;
+  onFit: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
   onPortfolioExportExcel: () => void;
   onPortfolioExportPowerPoint: () => void;
   onOpenSettings: () => void;
@@ -87,6 +98,16 @@ const ToolbarComponent: React.FC<IToolbarProps> = ({
   onExportExcel,
   onExportImage,
   onExportPowerPoint,
+  onExportCsv,
+  onExportIcs,
+  onPrint,
+  onSetBaseline,
+  onCopyLink,
+  onFit,
+  onUndo,
+  onRedo,
+  canUndo,
+  canRedo,
   onPortfolioExportExcel,
   onPortfolioExportPowerPoint,
   onOpenSettings,
@@ -165,7 +186,7 @@ const ToolbarComponent: React.FC<IToolbarProps> = ({
                 >
                   <span style={{ fontSize: 14, marginRight: 6, flexShrink: 0 }}>⊞</span>
                   <span style={{ flex: 1 }}>{strings.Toolbar_PortfolioLabel}</span>
-                  <span style={{ fontSize: 11, color: '#605E5C' }}>{strings.Toolbar_AllProjectsSubtext}</span>
+                  <span style={{ fontSize: 11, color: 'var(--neutralSecondary, #605E5C)' }}>{strings.Toolbar_AllProjectsSubtext}</span>
                 </CalloutMenuItem>
                 <div className={styles.calloutSeparator} />
                 {projects.map(p => (
@@ -178,20 +199,20 @@ const ToolbarComponent: React.FC<IToolbarProps> = ({
                     <div className={styles.calloutDot} style={{ background: p.color }} />
                     <span style={{ flex: 1 }}>{p.title}</span>
                     {p.isArchived
-                      ? <span style={{ fontSize: 10, color: '#605E5C', background: '#F3F2F1', border: '1px solid #EDEBE9', borderRadius: 3, padding: '1px 5px' }}>{strings.Toolbar_ArchivedBadge}</span>
-                      : <span style={{ fontSize: 11, color: '#605E5C' }}>{p.status}</span>
+                      ? <span style={{ fontSize: 10, color: 'var(--neutralSecondary, #605E5C)', background: 'var(--neutralLighter, #F3F2F1)', border: '1px solid var(--neutralLight, #EDEBE9)', borderRadius: 3, padding: '1px 5px' }}>{strings.Toolbar_ArchivedBadge}</span>
+                      : <span style={{ fontSize: 11, color: 'var(--neutralSecondary, #605E5C)' }}>{p.status}</span>
                     }
                   </CalloutMenuItem>
                 ))}
                 {projects.length === 0 && (
-                  <div style={{ padding: '10px 16px', color: '#605E5C', fontSize: 13 }}>{strings.Toolbar_NoProjectsYet}</div>
+                  <div style={{ padding: '10px 16px', color: 'var(--neutralSecondary, #605E5C)', fontSize: 13 }}>{strings.Toolbar_NoProjectsYet}</div>
                 )}
                 <div className={styles.calloutSeparator} />
                 {hasArchivedProjects && (
                   <CalloutMenuItem
                     className={styles.calloutItem}
                     onClick={() => { onToggleShowArchived(); }}
-                    style={{ color: '#605E5C' }}
+                    style={{ color: 'var(--neutralSecondary, #605E5C)' }}
                   >
                     <span style={{ marginRight: 6, fontSize: 13 }}>{showArchivedProjects ? '☑' : '☐'}</span>
                     <span>{strings.Toolbar_ShowArchivedProjects}</span>
@@ -227,13 +248,23 @@ const ToolbarComponent: React.FC<IToolbarProps> = ({
 
         <div className={styles.row1Right}>
           {selectedProject && viewMode !== 'portfolio' && (
-            <button
-              className={`${styles.settingsBtn} ${showSettings ? styles.active : ''}`}
-              onClick={onOpenSettings}
-              title={strings.Toolbar_OptionsButton}
-            >
-              {strings.Toolbar_OptionsButton}
-            </button>
+            <>
+              <button
+                className={styles.settingsBtn}
+                onClick={onCopyLink}
+                title={strings.Toolbar_CopyLinkTitle}
+              >
+                {strings.Toolbar_CopyLink}
+              </button>
+              <button
+                className={`${styles.settingsBtn} ${showSettings ? styles.active : ''}`}
+                onClick={onOpenSettings}
+                title={strings.Toolbar_OptionsButton}
+                aria-pressed={showSettings}
+              >
+                {strings.Toolbar_OptionsButton}
+              </button>
+            </>
           )}
 
           {viewMode === 'portfolio' && (
@@ -243,6 +274,9 @@ const ToolbarComponent: React.FC<IToolbarProps> = ({
                   className={styles.iconBtn}
                   onClick={() => setMoreCalloutVisible(v => !v)}
                   title={strings.Toolbar_MoreOptionsTitle}
+                  aria-label={strings.Toolbar_MoreOptionsTitle}
+                  aria-haspopup="true"
+                  aria-expanded={moreCalloutVisible}
                 >
                   ⋯
                 </button>
@@ -290,6 +324,37 @@ const ToolbarComponent: React.FC<IToolbarProps> = ({
                   </button>
                 ))}
               </div>
+              <button
+                className={`${styles.todayBtn} ${zoomLevel === null ? styles.active : ''}`}
+                onClick={onFit}
+                title={strings.Toolbar_FitToProjectTitle}
+                aria-pressed={zoomLevel === null}
+              >
+                {strings.Toolbar_FitToProject}
+              </button>
+            </>
+          )}
+          {/* Undo / redo of optimistic task edits (Ctrl+Z / Ctrl+Y) */}
+          {selectedProject && (
+            <>
+              <button
+                className={styles.todayBtn}
+                onClick={onUndo}
+                disabled={!canUndo}
+                title={strings.Toolbar_UndoTitle}
+                aria-label={strings.Toolbar_UndoTitle}
+              >
+                ↶
+              </button>
+              <button
+                className={styles.todayBtn}
+                onClick={onRedo}
+                disabled={!canRedo}
+                title={strings.Toolbar_RedoTitle}
+                aria-label={strings.Toolbar_RedoTitle}
+              >
+                ↷
+              </button>
             </>
           )}
         </div>
@@ -302,6 +367,7 @@ const ToolbarComponent: React.FC<IToolbarProps> = ({
                 key={v.id}
                 className={`${styles.viewBtn} ${viewMode === v.id ? styles.active : ''}`}
                 onClick={() => onViewChange(v.id)}
+                aria-pressed={viewMode === v.id}
               >
                 <span>{v.icon}</span>
                 <span>{v.label}</span>
@@ -317,6 +383,9 @@ const ToolbarComponent: React.FC<IToolbarProps> = ({
                   className={styles.iconBtn}
                   onClick={() => setMoreCalloutVisible(v => !v)}
                   title={strings.Toolbar_MoreOptionsTitle}
+                  aria-label={strings.Toolbar_MoreOptionsTitle}
+                  aria-haspopup="true"
+                  aria-expanded={moreCalloutVisible}
                 >
                   ⋯
                 </button>
@@ -338,10 +407,25 @@ const ToolbarComponent: React.FC<IToolbarProps> = ({
                     <CalloutMenuItem className={styles.calloutItem} onClick={() => { setMoreCalloutVisible(false); onExportPowerPoint(); }}>
                       {strings.Toolbar_ExportToPowerPoint}
                     </CalloutMenuItem>
+                    <CalloutMenuItem className={styles.calloutItem} onClick={() => { setMoreCalloutVisible(false); onExportCsv(); }}>
+                      {strings.Toolbar_ExportCsv}
+                    </CalloutMenuItem>
+                    <CalloutMenuItem className={styles.calloutItem} onClick={() => { setMoreCalloutVisible(false); onExportIcs(); }}>
+                      {strings.Toolbar_ExportIcs}
+                    </CalloutMenuItem>
                     {viewMode === 'gantt' && (
-                      <CalloutMenuItem className={styles.calloutItem} onClick={() => { setMoreCalloutVisible(false); onExportImage(); }}>
-                        {strings.Toolbar_ExportAsImage}
-                      </CalloutMenuItem>
+                      <>
+                        <CalloutMenuItem className={styles.calloutItem} onClick={() => { setMoreCalloutVisible(false); onExportImage(); }}>
+                          {strings.Toolbar_ExportAsImage}
+                        </CalloutMenuItem>
+                        <CalloutMenuItem className={styles.calloutItem} onClick={() => { setMoreCalloutVisible(false); onPrint(); }}>
+                          {strings.Toolbar_Print}
+                        </CalloutMenuItem>
+                        <div className={styles.calloutSeparator} />
+                        <CalloutMenuItem className={styles.calloutItem} onClick={() => { setMoreCalloutVisible(false); onSetBaseline(); }}>
+                          {strings.Toolbar_SetBaseline}
+                        </CalloutMenuItem>
+                      </>
                     )}
                     <div className={styles.calloutSeparator} />
                     <CalloutMenuItem className={styles.calloutItem} onClick={() => { setMoreCalloutVisible(false); onEditProject(); }}>
@@ -377,6 +461,7 @@ const ToolbarComponent: React.FC<IToolbarProps> = ({
             phases={knownPhases}
             matchCount={filteredCount}
             totalCount={totalCount}
+            resetKey={selectedProject.id}
           />
         </div>
       )}

@@ -6,20 +6,32 @@ import '@pnp/sp/items/get-all';
 import '@pnp/sp/fields';
 import '@pnp/sp/views';
 import '@pnp/sp/batching';
-import { IProject, ITask, IProjectTaskStats, ProjectStatus, TaskPriority, TaskStatus } from '../models';
+import '@pnp/sp/profiles';
+import * as strings from 'SmartGanttWebPartStrings';
+import { IDependencyLink, IProject, ITask, IProjectTaskStats, ProjectStatus, TaskPriority, TaskStatus } from '../models';
 import { computeTaskHealth, computeProjectHealth } from '../utils/healthUtils';
 import { toDateOnly } from '../utils/dateUtils';
+import { parseDependencies, serializeDependencies } from '../utils/dependencyUtils';
+import { withRetry, runLimited } from '../utils/retryUtils';
+import { formatString } from '../components/localeUtils';
 
 const PROJECTS_LIST = 'SmartGantt_Projects';
 
-// Schedule dates are calendar days. We store them as UTC midnight so the same
-// day is read back regardless of the viewer's timezone (PnPjs serializes Date
-// objects for Edm.DateTime fields; raw ISO strings can fail in some tenants).
+// Schedule dates are calendar days. The columns are DateTime fields that
+// SharePoint displays in the site's time zone, so UTC midnight showed as the
+// previous day on sites west of UTC. We store 10:00 UTC instead, which is on
+// the same calendar day for every site zone from UTC-10 (Hawaii) to UTC+13
+// (NZ daylight time, Tonga); no single instant can also cover UTC-11 and +14.
+// Reading always goes through toDateOnly() (utils/dateUtils), which takes the
+// UTC calendar date, so the app shows the stored day in every viewer zone and
+// older values written as UTC midnight still read as the same day.
+// PnPjs serializes Date objects for Edm.DateTime fields; raw ISO strings can
+// fail in some tenants.
 function toSPDate(s: string | undefined | null): Date | null {
   const dateOnly = toDateOnly(s);
   if (!dateOnly) return null;
   const [y, m, d] = dateOnly.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d));
+  return new Date(Date.UTC(y, m - 1, d, 10, 0, 0));
 }
 
 // PnPjs surfaces HTTP failures as HttpRequestError with a status property;
@@ -50,21 +62,45 @@ function isPreconditionFailedError(e: unknown): boolean {
   return /412/.test(msg) || /precondition/i.test(msg);
 }
 
+type ConflictError = Error & { status: number; isConflict: true };
+
+function makeConflictError(message: string): ConflictError {
+  const err = new Error(message) as ConflictError;
+  err.status = 412;
+  err.isConflict = true;
+  return err;
+}
+
+/** True for the error updateTask/updateProject throw when the item changed since it was read (HTTP 412/409). */
+export function isConflictError(e: unknown): boolean {
+  const err = e as { isConflict?: boolean; status?: number } | null;
+  return !!err && (err.isConflict === true || err.status === 412 || err.status === 409);
+}
+
 // The Dependencies field is a plain Text column capped at 500 characters
 // (see field def below); a task with too many dependencies would otherwise
 // fail the save with a raw SharePoint error deep inside a PnPjs call.
 const DEPENDENCIES_MAX_LENGTH = 500;
-function joinDependencies(ids: number[] | undefined): string {
-  const joined = (ids || []).join(',');
+function joinDependencies(ids: number[] | undefined, links?: Record<number, IDependencyLink>): string {
+  const joined = serializeDependencies(ids || [], links);
   if (joined.length > DEPENDENCIES_MAX_LENGTH) {
-    throw new Error(`This task has too many dependencies to save (limit is around 60). Remove some and try again.`);
+    throw new Error(strings.Svc_TooManyDependencies);
   }
   return joined;
 }
 
+const STATS_TTL_MS = 60000;
+const STATS_CONCURRENCY = 4;
+
 export class SharePointService {
   private sp: SPFI;
   private projectsListEnsured = false;
+  // IsArchived migration is attempted at most once per service instance, so a
+  // read-only user doesn't repeat a doomed field-add (and log) on every load.
+  private isArchivedChecked = false;
+  // listName -> whether BaselineStart/BaselineDue exist (or could be added).
+  private baselineSupport = new Map<string, boolean>();
+  private statsCache = new Map<string, { at: number; stats: IProjectTaskStats }>();
 
   constructor(sp: SPFI) {
     this.sp = sp;
@@ -99,29 +135,39 @@ export class SharePointService {
   }
 
   private async _ensureIsArchivedField(): Promise<void> {
+    if (this.isArchivedChecked) return;
     const list = this.sp.web.lists.getByTitle(PROJECTS_LIST);
     try {
-      await list.fields.getByInternalNameOrTitle('IsArchived')();
-    } catch {
+      await withRetry(() => list.fields.getByInternalNameOrTitle('IsArchived')());
+      this.isArchivedChecked = true;
+    } catch (e) {
+      // Only a genuine "field not found" means the migration is needed; a 403,
+      // throttling or network error says nothing about the field, so it must
+      // not trigger a field-add. Either way, don't probe again this session.
+      this.isArchivedChecked = true;
+      if (!isNotFoundError(e)) {
+        console.warn('[SmartGantt] IsArchived check failed (skipping migration):', e);
+        return;
+      }
       try {
         await list.fields.add('IsArchived', 8, {});
-      } catch (e) {
+      } catch (addErr) {
         // Read-only users can't add fields; archiving simply won't be available.
-        console.warn('[SmartGantt] IsArchived migration skipped:', e);
+        console.warn('[SmartGantt] IsArchived migration skipped:', addErr);
       }
     }
   }
 
   async getProjects(): Promise<IProject[]> {
     await this.ensureProjectsList();
-    const items = await this.sp.web.lists
+    const items = await withRetry(() => this.sp.web.lists
       .getByTitle(PROJECTS_LIST)
       .items.select(
         'Id', 'Title', 'ProjectListName', 'ProjectDescription', 'ProjectColor',
         'ProjectStartDate', 'ProjectDueDate', 'ProjectStatus', 'ProjectManager',
         'ProjectManagerEmail', 'Created', 'IsArchived'
       )
-      .getAll();
+      .getAll());
 
     return items
       .map(item => ({
@@ -208,11 +254,15 @@ export class SharePointService {
     if (data.dueDate !== undefined) updates.ProjectDueDate = toSPDate(data.dueDate);
     if (data.status !== undefined) updates.ProjectStatus = data.status;
     if (data.isArchived !== undefined) updates.IsArchived = data.isArchived;
+    if (data.projectManager !== undefined) updates.ProjectManager = data.projectManager;
+    if (data.projectManagerEmail !== undefined) updates.ProjectManagerEmail = data.projectManagerEmail;
     try {
       await this.sp.web.lists.getByTitle(PROJECTS_LIST).items.getById(id).update(updates, data.etag || '*');
+      // Project dates feed the health figures in cached stats.
+      this.invalidateStats();
     } catch (e) {
       if (isPreconditionFailedError(e)) {
-        throw new Error('This project was changed by someone else since you opened it. Refresh and try again.');
+        throw makeConflictError(strings.Svc_ProjectChangedByOthers);
       }
       throw e;
     }
@@ -227,15 +277,18 @@ export class SharePointService {
   }
 
   async deleteProject(id: number, listName: string): Promise<void> {
-    await this.sp.web.lists.getByTitle(PROJECTS_LIST).items.getById(id).recycle();
+    // Recycle the task list FIRST. If that fails (e.g. 403) the registry entry
+    // is still intact, so the project stays visible and the delete can be
+    // retried; the reverse order would leave an orphaned, unreachable list.
     try {
       await this.sp.web.lists.getByTitle(listName).recycle();
     } catch (e) {
-      // A missing list is fine (already gone). Anything else — 403,
-      // throttling — must surface, or the task list is silently orphaned
-      // with no registry entry pointing back to it.
+      // A missing list is fine (already gone). Anything else must surface.
       if (!isNotFoundError(e)) throw e;
     }
+    await this.sp.web.lists.getByTitle(PROJECTS_LIST).items.getById(id).recycle();
+    this.invalidateStats(listName);
+    this.baselineSupport.delete(listName);
   }
 
   private async _createProjectList(listName: string): Promise<void> {
@@ -248,34 +301,84 @@ export class SharePointService {
       // IsMilestone uses FieldTypeKind 8 (Boolean) via the generic add() because
       // addBoolean() in PnPjs 3.x passes the wrong SP type and triggers a 400.
       // All field adds go through a single REST batch — one round trip instead
-      // of fifteen. Individual failures (duplicate field, etc.) are non-fatal.
+      // of seventeen. Any failed field fails the whole create (the catch below
+      // deletes the half-built list) so a project never ends up without columns.
       const [batchedSP, execute] = this.sp.batched();
       const list = batchedSP.web.lists.getByTitle(listName);
-      const queue = (p: Promise<unknown>): void => {
-        p.catch(e => console.warn('[SmartGantt] Field creation warning (non-fatal):', e));
-      };
+      const pending: Array<{ name: string; promise: Promise<unknown>; fallback?: () => Promise<unknown>; optional?: boolean }> = [];
+      const queue = (
+        name: string,
+        promise: Promise<unknown>,
+        opts: { fallback?: () => Promise<unknown>; optional?: boolean } = {},
+      ): void => { pending.push({ name, promise, ...opts }); };
+      const plainList = this.sp.web.lists.getByTitle(listName);
 
-      queue(list.fields.addMultilineText('TaskDescription'));
-      queue(list.fields.addDateTime('StartDate'));
-      queue(list.fields.addDateTime('DueDate'));
-      queue(list.fields.addChoice('Status', {
+      queue('TaskDescription', list.fields.addMultilineText('TaskDescription'));
+      queue('StartDate', list.fields.addDateTime('StartDate'));
+      queue('DueDate', list.fields.addDateTime('DueDate'));
+      queue('Status', list.fields.addChoice('Status', {
         Choices: ['Not Started', 'In Progress', 'Completed', 'On Hold', 'Cancelled'],
       }));
-      queue(list.fields.addChoice('Priority', {
+      queue('Priority', list.fields.addChoice('Priority', {
         Choices: ['Critical', 'High', 'Medium', 'Low'],
       }));
-      queue(list.fields.addNumber('PercentComplete'));
-      queue(list.fields.addNumber('ParentTaskId', { Indexed: true }));
-      queue(list.fields.addText('Dependencies', { MaxLength: 500 }));
-      queue(list.fields.addMultilineText('Notes'));
-      queue(list.fields.addText('TaskColor', { MaxLength: 20 }));
-      queue(list.fields.addNumber('SortOrder'));
-      queue(list.fields.add('IsMilestone', 8));
-      queue(list.fields.addText('Phase', { MaxLength: 100 }));
-      queue(list.fields.addText('AssignedToName', { MaxLength: 255 }));
-      queue(list.fields.addText('AssignedToEmail', { MaxLength: 255 }));
+      queue('PercentComplete', list.fields.addNumber('PercentComplete'));
+      // Indexing is a nice-to-have (used by the parent-task lookup); if the
+      // index can't be created, a plain number column still works.
+      queue('ParentTaskId', list.fields.addNumber('ParentTaskId', { Indexed: true }), {
+        fallback: () => plainList.fields.addNumber('ParentTaskId'),
+      });
+      // Single-line text columns are capped at 255 characters by SharePoint, so
+      // a longer MaxLength is rejected; fall back to a multi-line text column,
+      // which has no practical limit and reads back as the same plain string.
+      queue('Dependencies', list.fields.addText('Dependencies', { MaxLength: Math.min(DEPENDENCIES_MAX_LENGTH, 255) }), {
+        fallback: () => plainList.fields.addMultilineText('Dependencies'),
+      });
+      queue('Notes', list.fields.addMultilineText('Notes'));
+      queue('TaskColor', list.fields.addText('TaskColor', { MaxLength: 20 }));
+      queue('SortOrder', list.fields.addNumber('SortOrder'));
+      queue('IsMilestone', list.fields.add('IsMilestone', 8));
+      queue('Phase', list.fields.addText('Phase', { MaxLength: 100 }));
+      queue('AssignedToName', list.fields.addText('AssignedToName', { MaxLength: 255 }));
+      queue('AssignedToEmail', list.fields.addText('AssignedToEmail', { MaxLength: 255 }));
+      // Baselines are optional: _ensureBaselineFields adds them lazily later.
+      queue('BaselineStart', list.fields.addDateTime('BaselineStart'), { optional: true });
+      queue('BaselineDue', list.fields.addDateTime('BaselineDue'), { optional: true });
 
+      const outcomes = pending.map(p => p.promise.then(() => null, (e: unknown) => e));
       await execute();
+      const results = await Promise.all(outcomes);
+
+      const failures: Array<{ name: string; error: unknown }> = [];
+      for (let i = 0; i < pending.length; i++) {
+        if (results[i] === null) continue;
+        const p = pending[i];
+        if (p.optional) {
+          console.warn(`[SmartGantt] Optional column ${p.name} was not created:`, results[i]);
+          continue;
+        }
+        if (p.fallback) {
+          try {
+            await p.fallback();
+            console.warn(`[SmartGantt] Column ${p.name} created with fallback settings after:`, results[i]);
+            continue;
+          } catch (e) {
+            failures.push({ name: p.name, error: e });
+            continue;
+          }
+        }
+        failures.push({ name: p.name, error: results[i] });
+      }
+      if (failures.length > 0) {
+        const detail = failures
+          .map(f => `${f.name}: ${f.error instanceof Error ? f.error.message : String(f.error)}`)
+          .join(' | ');
+        throw new Error(formatString(strings.Svc_ColumnCreateFailed, {
+          count: failures.length,
+          detail,
+        }));
+      }
+      this.baselineSupport.set(listName, !pending.some((p, i) => p.optional && results[i] !== null));
 
       await this._setupTaskListViews(listName);
     } catch (e) {
@@ -290,45 +393,105 @@ export class SharePointService {
 
   // ─── Tasks ────────────────────────────────────────────────────────────────
 
+  /**
+   * Whether the task list has (or could be given) the BaselineStart/BaselineDue
+   * columns. Lists created before baselines existed get them added lazily; a
+   * user without permission to add fields simply gets no baseline support for
+   * that list (cached, so we don't retry on every read).
+   */
+  private async _ensureBaselineFields(listName: string): Promise<boolean> {
+    const cached = this.baselineSupport.get(listName);
+    if (cached !== undefined) return cached;
+    let supported = false;
+    try {
+      const list = this.sp.web.lists.getByTitle(listName);
+      const existing = await withRetry(() => list.fields
+        .select('InternalName')
+        .filter("InternalName eq 'BaselineStart' or InternalName eq 'BaselineDue'")());
+      const have = new Set<string>((existing as Array<{ InternalName: string }>).map(f => f.InternalName));
+      try {
+        if (!have.has('BaselineStart')) await list.fields.addDateTime('BaselineStart');
+        if (!have.has('BaselineDue')) await list.fields.addDateTime('BaselineDue');
+        supported = true;
+      } catch (e) {
+        // Read-only / limited users can't add fields; baselines just aren't available.
+        console.warn('[SmartGantt] Baseline field migration skipped:', e);
+      }
+    } catch (e) {
+      // Don't cache a transient failure — try again on the next read.
+      console.warn('[SmartGantt] Baseline field check failed:', e);
+      return false;
+    }
+    this.baselineSupport.set(listName, supported);
+    return supported;
+  }
+
   async getProjectTasks(listName: string): Promise<ITask[]> {
-    const items = await this.sp.web.lists
+    const baselines = await this._ensureBaselineFields(listName);
+    const fields = [
+      'Id', 'Title', 'TaskDescription', 'StartDate', 'DueDate', 'Status', 'Priority',
+      'AssignedToName', 'AssignedToEmail', 'PercentComplete', 'ParentTaskId', 'Dependencies',
+      'Notes', 'TaskColor', 'SortOrder', 'IsMilestone', 'Phase', 'Created', 'Modified',
+    ];
+    if (baselines) fields.push('BaselineStart', 'BaselineDue');
+    const items = await withRetry(() => this.sp.web.lists
       .getByTitle(listName)
-      .items.select(
-        'Id', 'Title', 'TaskDescription', 'StartDate', 'DueDate', 'Status', 'Priority',
-        'AssignedToName', 'AssignedToEmail', 'PercentComplete', 'ParentTaskId', 'Dependencies',
-        'Notes', 'TaskColor', 'SortOrder', 'IsMilestone', 'Phase', 'Created', 'Modified'
-      )
-      .getAll();
+      .items.select(...fields)
+      .getAll());
 
     return items
-      .map(item => ({
-        id: item.Id,
-        title: item.Title,
-        description: item.TaskDescription || '',
-        startDate: toDateOnly(item.StartDate),
-        dueDate: toDateOnly(item.DueDate),
-        status: (item.Status || 'Not Started') as TaskStatus,
-        priority: (item.Priority || 'Medium') as TaskPriority,
-        assignedTo: item.AssignedToName || '',
-        assignedToEmail: item.AssignedToEmail || '',
-        percentComplete: item.PercentComplete || 0,
-        parentTaskId: item.ParentTaskId || null,
-        dependencies: item.Dependencies
-          ? item.Dependencies.split(',').map(Number).filter(Boolean)
-          : [],
-        notes: item.Notes || '',
-        color: item.TaskColor || '',
-        sortOrder: item.SortOrder || 0,
-        isMilestone: item.IsMilestone === true || item.IsMilestone === 1,
-        phase: item.Phase || '',
-        created: item.Created,
-        modified: item.Modified,
-        etag: item['odata.etag'] as string | undefined,
-      }))
+      .map(item => {
+        const parsed = parseDependencies(item.Dependencies || '');
+        const task: ITask = {
+          id: item.Id,
+          title: item.Title,
+          description: item.TaskDescription || '',
+          startDate: toDateOnly(item.StartDate),
+          dueDate: toDateOnly(item.DueDate),
+          status: (item.Status || 'Not Started') as TaskStatus,
+          priority: (item.Priority || 'Medium') as TaskPriority,
+          assignedTo: item.AssignedToName || '',
+          assignedToEmail: item.AssignedToEmail || '',
+          percentComplete: item.PercentComplete || 0,
+          parentTaskId: item.ParentTaskId || null,
+          dependencies: parsed.ids,
+          dependencyLinks: parsed.links,
+          notes: item.Notes || '',
+          color: item.TaskColor || '',
+          sortOrder: item.SortOrder || 0,
+          isMilestone: item.IsMilestone === true || item.IsMilestone === 1,
+          phase: item.Phase || '',
+          created: item.Created,
+          modified: item.Modified,
+          // Present on every item regardless of the $select projection.
+          etag: item['odata.etag'] as string | undefined,
+        };
+        if (baselines) {
+          const bs = toDateOnly(item.BaselineStart);
+          const bd = toDateOnly(item.BaselineDue);
+          if (bs) task.baselineStart = bs;
+          if (bd) task.baselineDue = bd;
+        }
+        return task;
+      })
       .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id);
   }
 
-  async getProjectTaskStats(project: IProject): Promise<IProjectTaskStats> {
+  /** Drop cached portfolio stats for one task list, or all of them. */
+  invalidateStats(listName?: string): void {
+    if (listName) this.statsCache.delete(listName); else this.statsCache.clear();
+  }
+
+  async getProjectTaskStats(project: IProject, force = false): Promise<IProjectTaskStats> {
+    const cached = this.statsCache.get(project.listName);
+    if (!force && cached && Date.now() - cached.at < STATS_TTL_MS) return cached.stats;
+    const stats = await this._loadProjectTaskStats(project);
+    // Failures are not cached, so a transient error can be retried immediately.
+    if (!stats.statsError) this.statsCache.set(project.listName, { at: Date.now(), stats });
+    return stats;
+  }
+
+  private async _loadProjectTaskStats(project: IProject): Promise<IProjectTaskStats> {
     const empty: IProjectTaskStats = {
       listName: project.listName,
       totalTasks: 0,
@@ -345,10 +508,11 @@ export class SharePointService {
     };
 
     try {
-      const items = await this.sp.web.lists
+      // Only the columns the stats need, in large pages (fewer round trips).
+      const items = await withRetry(() => this.sp.web.lists
         .getByTitle(project.listName)
         .items.select('Status', 'Priority', 'PercentComplete', 'StartDate', 'DueDate', 'IsMilestone')
-        .getAll();
+        .getAll(2000));
 
       if (items.length === 0) return empty;
 
@@ -412,16 +576,12 @@ export class SharePointService {
     }
   }
 
-  async getAllProjectStats(projects: IProject[]): Promise<Map<number, IProjectTaskStats>> {
+  /** Stats for every project, STATS_CONCURRENCY lists at a time; results are cached (see invalidateStats). */
+  async getAllProjectStats(projects: IProject[], force = false): Promise<Map<number, IProjectTaskStats>> {
     const map = new Map<number, IProjectTaskStats>();
-    const CONCURRENCY = 5;
-    for (let start = 0; start < projects.length; start += CONCURRENCY) {
-      const chunk = projects.slice(start, start + CONCURRENCY);
-      const results = await Promise.all(
-        chunk.map(p => this.getProjectTaskStats(p).then(stats => ({ id: p.id, stats })))
-      );
-      results.forEach(r => map.set(r.id, r.stats));
-    }
+    const results = await runLimited(projects, STATS_CONCURRENCY,
+      p => this.getProjectTaskStats(p, force).then(stats => ({ id: p.id, stats })));
+    results.forEach(r => map.set(r.id, r.stats));
     return map;
   }
 
@@ -437,7 +597,7 @@ export class SharePointService {
       AssignedToEmail: task.assignedToEmail || '',
       PercentComplete: task.percentComplete || 0,
       ParentTaskId: task.parentTaskId || 0,
-      Dependencies: joinDependencies(task.dependencies),
+      Dependencies: joinDependencies(task.dependencies, task.dependencyLinks),
       Notes: task.notes || '',
       TaskColor: task.color || '',
       SortOrder: task.sortOrder || 0,
@@ -448,7 +608,11 @@ export class SharePointService {
 
   async createTask(listName: string, task: Partial<ITask>): Promise<ITask> {
     const result = await this.sp.web.lists.getByTitle(listName).items.add(this._taskCreateFields(task));
+    this.invalidateStats(listName);
 
+    // items.add() returns the created row's data; its concurrency token (when
+    // present) lets the caller update the new task straight away.
+    const created = result.data as Record<string, unknown>;
     return {
       id: result.data.Id,
       title: task.title || 'New Task',
@@ -462,6 +626,7 @@ export class SharePointService {
       percentComplete: task.percentComplete || 0,
       parentTaskId: task.parentTaskId || null,
       dependencies: task.dependencies || [],
+      dependencyLinks: task.dependencyLinks,
       notes: task.notes || '',
       color: task.color || '',
       sortOrder: task.sortOrder || 0,
@@ -469,6 +634,7 @@ export class SharePointService {
       phase: task.phase || '',
       created: new Date().toISOString(),
       modified: new Date().toISOString(),
+      etag: (created['odata.etag'] as string | undefined) || undefined,
     };
   }
 
@@ -487,23 +653,35 @@ export class SharePointService {
 
     for (let start = 0; start < tasks.length; start += chunkSize) {
       const chunk = tasks.slice(start, start + chunkSize);
-      const [batchedSP, execute] = this.sp.batched();
-      const list = batchedSP.web.lists.getByTitle(listName);
-      chunk.forEach((task, i) => {
-        const idx = start + i;
-        list.items.add(this._taskCreateFields(task))
-          .then(r => { results[idx] = { id: r.data.Id }; })
-          .catch((e: unknown) => {
-            results[idx] = { id: null, error: e instanceof Error ? e.message : 'Unknown error' };
-          });
+      // A whole-batch throttle (429/503/504) means nothing in it was applied,
+      // so re-running the same chunk can't create duplicates. Per-row errors
+      // are reported in `results` instead.
+      await withRetry(async () => {
+        const [batchedSP, execute] = this.sp.batched();
+        const list = batchedSP.web.lists.getByTitle(listName);
+        chunk.forEach((task, i) => {
+          const idx = start + i;
+          list.items.add(this._taskCreateFields(task))
+            .then(r => { results[idx] = { id: r.data.Id }; })
+            .catch((e: unknown) => {
+              results[idx] = { id: null, error: e instanceof Error ? e.message : 'Unknown error' };
+            });
+        });
+        await execute();
       });
-      await execute();
     }
 
+    this.invalidateStats(listName);
     return results;
   }
 
-  async updateTask(listName: string, id: number, updates: Partial<ITask>): Promise<void> {
+  /**
+   * Update a task. Sends `updates.etag` as If-Match (falls back to '*'), and
+   * resolves with the item's NEW etag so the caller can keep editing it. On a
+   * 412 the thrown error is a conflict error (see isConflictError) with a
+   * localized "changed by someone else" message.
+   */
+  async updateTask(listName: string, id: number, updates: Partial<ITask> & { etag?: string }): Promise<string | undefined> {
     const data: Record<string, unknown> = {};
     if (updates.title !== undefined) data.Title = updates.title;
     if (updates.description !== undefined) data.TaskDescription = updates.description;
@@ -515,19 +693,121 @@ export class SharePointService {
     if (updates.assignedToEmail !== undefined) data.AssignedToEmail = updates.assignedToEmail;
     if (updates.percentComplete !== undefined) data.PercentComplete = updates.percentComplete;
     if (updates.parentTaskId !== undefined) data.ParentTaskId = updates.parentTaskId || 0;
-    if (updates.dependencies !== undefined) data.Dependencies = joinDependencies(updates.dependencies);
+    if (updates.dependencies !== undefined || updates.dependencyLinks !== undefined) {
+      let ids = updates.dependencies;
+      let links = updates.dependencyLinks;
+      if (ids === undefined) {
+        // Links without an id list: the links' keys are the predecessors.
+        ids = Object.keys(links || {}).map(Number);
+      } else if (links === undefined) {
+        // Ids changed but no link info passed: keep the link types the task
+        // already has for predecessors that remain, instead of silently
+        // resetting them to plain finish-to-start.
+        const current = await this.sp.web.lists.getByTitle(listName).items.getById(id).select('Dependencies')();
+        links = parseDependencies(current.Dependencies || '').links;
+      }
+      data.Dependencies = joinDependencies(ids, links);
+    }
     if (updates.notes !== undefined) data.Notes = updates.notes;
     if (updates.color !== undefined) data.TaskColor = updates.color;
     if (updates.sortOrder !== undefined) data.SortOrder = updates.sortOrder;
     if (updates.isMilestone !== undefined) data.IsMilestone = updates.isMilestone;
     if (updates.phase !== undefined) data.Phase = updates.phase;
+    if (updates.baselineStart !== undefined || updates.baselineDue !== undefined) {
+      if (await this._ensureBaselineFields(listName)) {
+        if (updates.baselineStart !== undefined) data.BaselineStart = toSPDate(updates.baselineStart);
+        if (updates.baselineDue !== undefined) data.BaselineDue = toSPDate(updates.baselineDue);
+      }
+    }
+
+    const item = this.sp.web.lists.getByTitle(listName).items.getById(id);
+    let newEtag: string | undefined;
     try {
-      await this.sp.web.lists.getByTitle(listName).items.getById(id).update(data, updates.etag || '*');
+      const res = await withRetry(() => item.update(data, updates.etag || '*'));
+      newEtag = (res.data as { etag?: string | null } | undefined)?.etag || undefined;
     } catch (e) {
       if (isPreconditionFailedError(e)) {
-        throw new Error('This task was changed by someone else since you loaded it. Refresh and try again.');
+        throw makeConflictError(strings.Svc_TaskChangedByOthers);
       }
       throw e;
+    }
+    this.invalidateStats(listName);
+
+    if (!newEtag) {
+      // The MERGE response normally carries the ETag header; if a proxy
+      // stripped it, read it back so the caller never keeps a stale token.
+      try {
+        const fresh = await item.select('Id')();
+        newEtag = (fresh as Record<string, unknown>)['odata.etag'] as string | undefined;
+      } catch { /* best effort — caller falls back to '*' */ }
+    }
+    return newEtag;
+  }
+
+  /**
+   * Snapshot every dated task's current start/due into BaselineStart/BaselineDue
+   * (batched, `*` etag — it overwrites regardless of concurrent edits). Task
+   * etags change as a result, so callers should reload the tasks afterwards.
+   */
+  async captureBaseline(listName: string, tasks: ITask[]): Promise<void> {
+    if (!(await this._ensureBaselineFields(listName))) {
+      throw new Error(strings.Svc_BaselineUnavailable);
+    }
+    const CHUNK_SIZE = 50;
+    const errors: unknown[] = [];
+    for (let start = 0; start < tasks.length; start += CHUNK_SIZE) {
+      const chunk = tasks.slice(start, start + CHUNK_SIZE);
+      await withRetry(async () => {
+        const [batchedSP, execute] = this.sp.batched();
+        const list = batchedSP.web.lists.getByTitle(listName);
+        chunk.forEach(t => {
+          list.items.getById(t.id)
+            .update({ BaselineStart: toSPDate(t.startDate), BaselineDue: toSPDate(t.dueDate) })
+            .catch(e => errors.push(e));
+        });
+        await execute();
+      });
+    }
+    this.invalidateStats(listName);
+    if (errors.length > 0) {
+      const first = errors[0];
+      throw new Error(first instanceof Error ? first.message : String(first));
+    }
+  }
+
+  /**
+   * Directory search for a people picker: matches from the tenant's people
+   * picker (any user the current user can resolve), by name or email. Never
+   * throws — a failed or unauthorized search just yields no suggestions.
+   */
+  async searchPeople(query: string): Promise<Array<{ name: string; email: string }>> {
+    const q = (query || '').trim();
+    if (q.length < 2) return [];
+    try {
+      const entities = await withRetry(() => this.sp.profiles.clientPeoplePickerSearchUser({
+        QueryString: q,
+        MaximumEntitySuggestions: 10,
+        AllowEmailAddresses: true,
+        AllowMultipleEntities: false,
+        AllUrlZones: false,
+        // PrincipalType.User (1) and PrincipalSource.All (15); the PnP enums
+        // are ambient declarations, so pass the numeric values.
+        PrincipalType: 1 as never,
+        PrincipalSource: 15 as never,
+      }), { retries: 1 });
+      const seen = new Set<string>();
+      const people: Array<{ name: string; email: string }> = [];
+      (entities || []).forEach(en => {
+        const email = (en.EntityData && en.EntityData.Email) || '';
+        const name = en.DisplayText || email;
+        const key = (email || name).toLowerCase();
+        if (!name || seen.has(key)) return;
+        seen.add(key);
+        people.push({ name, email });
+      });
+      return people;
+    } catch {
+      return [];
     }
   }
 
@@ -541,27 +821,31 @@ export class SharePointService {
     // recycle the parent — a partially-promoted set of children would
     // otherwise be silently orphaned under a since-recycled parent.
     try {
-      const children = await list.items.select('Id').filter(`ParentTaskId eq ${id}`).getAll();
+      const children = await withRetry(() => list.items.select('Id').filter(`ParentTaskId eq ${id}`).getAll());
       const CHUNK_SIZE = 100;
       for (let start = 0; start < children.length; start += CHUNK_SIZE) {
         const chunk = children.slice(start, start + CHUNK_SIZE);
-        const [batchedSP, execute] = this.sp.batched();
-        const batchedList = batchedSP.web.lists.getByTitle(listName);
         const errors: unknown[] = [];
-        chunk.forEach(c => {
-          batchedList.items.getById(c.Id).update({ ParentTaskId: 0 }).catch(e => errors.push(e));
+        await withRetry(async () => {
+          errors.length = 0;
+          const [batchedSP, execute] = this.sp.batched();
+          const batchedList = batchedSP.web.lists.getByTitle(listName);
+          chunk.forEach(c => {
+            batchedList.items.getById(c.Id).update({ ParentTaskId: 0 }).catch(e => errors.push(e));
+          });
+          await execute();
         });
-        await execute();
         if (errors.length > 0) throw errors[0];
       }
     } catch (e) {
       throw new Error(
-        `Could not reassign this task's sub-tasks before deleting it: ${e instanceof Error ? e.message : 'unknown error'}`
+        formatString(strings.Svc_SubtaskReassignFailed, { detail: e instanceof Error ? e.message : 'unknown error' })
       );
     }
 
     // Recycle (not delete) so the task can be restored from the recycle bin.
     await list.items.getById(id).recycle();
+    this.invalidateStats(listName);
   }
 
   // ─── List naming ──────────────────────────────────────────────────────────

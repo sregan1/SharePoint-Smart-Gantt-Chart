@@ -10,13 +10,70 @@ import {
   HEADER_THEME_COLORS, phaseColor,
 } from '../models';
 import { computeTaskHealth, healthColor, healthLabel } from '../utils/healthUtils';
-import { parseDateOnly, formatDateOnly, todayLocalMidnight } from '../utils/dateUtils';
+import { serializeDependencies } from '../utils/dependencyUtils';
+import { parseDateOnly, formatDateOnly, todayLocalMidnight, dateToDateOnlyString as dateOnlyString } from '../utils/dateUtils';
 import { formatString } from '../components/localeUtils';
 
 // Strip characters that are invalid in file names (project titles can contain
 // anything).
 function safeFileName(name: string): string {
   return name.replace(/[\\/:*?"<>|]/g, '-').trim();
+}
+
+// Colors come from user-editable data (project/task color fields) and end up
+// inside SVG markup and PowerPoint XML, so never interpolate them raw.
+// Accepts #rgb / #rgba / #rrggbb / #rrggbbaa and CSS named colors; anything
+// else (including markup) falls back. Always returns lowercase '#rrggbb' (alpha
+// dropped) so callers can append their own alpha suffix.
+const HEX_COLOR_RE = /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+const DEFAULT_COLOR = '#0078d4';
+
+function expandHex(c: string): string {
+  let h = c.slice(1).toLowerCase();
+  if (h.length === 3 || h.length === 4) h = h.split('').map(ch => ch + ch).join('');
+  return `#${h.slice(0, 6)}`;
+}
+
+let colorProbe: CanvasRenderingContext2D | null | undefined;
+
+function namedColorToHex(name: string): string | null {
+  try {
+    if (colorProbe === undefined) colorProbe = document.createElement('canvas').getContext('2d');
+    if (!colorProbe) return null;
+    // The canvas keeps the previous fillStyle when it can't parse the new one,
+    // so probe with two different sentinels to tell "invalid" from "same color".
+    colorProbe.fillStyle = '#010203';
+    colorProbe.fillStyle = name;
+    const first = String(colorProbe.fillStyle);
+    colorProbe.fillStyle = '#040506';
+    colorProbe.fillStyle = name;
+    const second = String(colorProbe.fillStyle);
+    return first === second && HEX_COLOR_RE.test(first) ? expandHex(first) : null;
+  } catch {
+    return null;
+  }
+}
+
+function safeColor(value: string | undefined | null, fallback: string = DEFAULT_COLOR): string {
+  const c = (value || '').trim();
+  if (HEX_COLOR_RE.test(c)) return expandHex(c);
+  if (/^[a-z]{3,20}$/i.test(c)) {
+    const named = namedColorToHex(c);
+    if (named) return named;
+  }
+  return HEX_COLOR_RE.test(fallback) ? expandHex(fallback) : DEFAULT_COLOR;
+}
+
+function downloadBlob(blob: Blob, fileName: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  // Some browsers start the download asynchronously; revoke on the next tick.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 // ─── Excel export ─────────────────────────────────────────────────────────────
@@ -121,11 +178,13 @@ function buildRows(tasks: ITask[]): IVisibleRow[] {
 }
 
 function taskDisplayColor(task: ITask, settings: IGanttDisplaySettings): string {
-  if (task.color) return task.color;
-  if (settings.colorBy === 'priority') return PRIORITY_COLORS[task.priority] || '#0078D4';
-  if (settings.colorBy === 'phase' && task.phase) return phaseColor(task.phase);
-  if (settings.colorBy === 'health') return healthColor(computeTaskHealth(task));
-  return STATUS_COLORS[task.status] || '#0078D4';
+  const statusColor = STATUS_COLORS[task.status] || DEFAULT_COLOR;
+  // A free-text task color that isn't a valid color falls back to the status color.
+  if (task.color) return safeColor(task.color, statusColor);
+  if (settings.colorBy === 'priority') return safeColor(PRIORITY_COLORS[task.priority], statusColor);
+  if (settings.colorBy === 'phase' && task.phase) return safeColor(phaseColor(task.phase), statusColor);
+  if (settings.colorBy === 'health') return safeColor(healthColor(computeTaskHealth(task)), statusColor);
+  return safeColor(statusColor);
 }
 
 export function renderGanttSVG(
@@ -135,6 +194,7 @@ export function renderGanttSVG(
 ): string {
   const ROW_H = settings.rowHeight;
   const theme = HEADER_THEME_COLORS[settings.headerTheme];
+  const projectColorSafe = safeColor(project.color);
 
   // Date range
   const today = todayLocalMidnight();
@@ -330,7 +390,7 @@ export function renderGanttSVG(
   </defs>
 
   <!-- ── Title bar ─────────────────────────────────────────────────── -->
-  <rect width="${totalW}" height="${TITLE_H}" fill="${project.color}"/>
+  <rect width="${totalW}" height="${TITLE_H}" fill="${projectColorSafe}"/>
   <circle cx="24" cy="${TITLE_H / 2}" r="7" fill="white" opacity="0.25"/>
   <text x="38" y="${TITLE_H / 2 + 6}" font-size="17" font-weight="700" fill="white">${escXml(project.title)}</text>
   <text x="${totalW - 12}" y="${TITLE_H / 2 + 5}" font-size="11" fill="rgba(255,255,255,0.7)" text-anchor="end">${escXml(formatString(strings.Export_ExportedDateLabel, { date: format(today, 'MMM d, yyyy') }))}</text>
@@ -421,7 +481,10 @@ function svgToCanvas(svgString: string, scale: number): Promise<HTMLCanvasElemen
       URL.revokeObjectURL(svgUrl);
       resolve(canvas);
     };
-    img.onerror = (): void => reject(new Error(strings.Export_SvgRenderFailed));
+    img.onerror = (): void => {
+      URL.revokeObjectURL(svgUrl);
+      reject(new Error(strings.Export_SvgRenderFailed));
+    };
     img.src = svgUrl;
   });
 }
@@ -430,8 +493,9 @@ function svgToPngDataUrl(svgString: string, scale: number = 2): Promise<string> 
   return svgToCanvas(svgString, scale).then(canvas => canvas.toDataURL('image/png'));
 }
 
+// PowerPoint wants 'RRGGBB' with no '#'; validated so a stray value can't corrupt the XML.
 function hex(color: string): string {
-  return color.startsWith('#') ? color.slice(1) : color;
+  return safeColor(color).slice(1).toUpperCase();
 }
 
 export async function exportToPowerPoint(
@@ -838,13 +902,19 @@ function portfolioHealthHex(h: string): string {
   return map[h] ?? '323130';
 }
 
-export function exportPortfolioToExcel(
-  projects: IProject[],
-  statsMap: Map<number, IProjectTaskStats> | null
-): void {
-  const fmt = (d: string): string => formatDateOnly(d, 'MM/dd/yyyy', '');
+const PORTFOLIO_HEADERS = [
+  strings.Export_TableProject, strings.Export_TableStatus, strings.Export_TableHealth,
+  strings.Export_StatTotalTasks, strings.Export_StatCompleted, strings.Export_StatInProgress,
+  strings.Export_TableAtRisk, strings.Export_TableOverdue, strings.Export_TablePctDone,
+  strings.Export_ColStart, strings.Export_ColDue, strings.Export_ColDescription,
+];
 
-  const rows = projects.map(p => {
+function portfolioRows(
+  projects: IProject[],
+  statsMap: Map<number, IProjectTaskStats> | null,
+  fmt: (d: string) => string
+): Array<Record<string, string | number>> {
+  return projects.map(p => {
     const s = statsMap?.get(p.id);
     const ok = s && !s.statsError;
     return {
@@ -862,11 +932,23 @@ export function exportPortfolioToExcel(
       [strings.Export_ColDescription]:   p.description,
     };
   });
+}
 
-  const ws = XLSX.utils.json_to_sheet(rows);
-  const headers = Object.keys(rows[0] ?? {});
+export function exportPortfolioToExcel(
+  projects: IProject[],
+  statsMap: Map<number, IProjectTaskStats> | null
+): void {
+  const fmt = (d: string): string => formatDateOnly(d, 'MM/dd/yyyy', '');
+  const rows = portfolioRows(projects, statsMap, fmt);
+
+  // json_to_sheet([]) has no header row at all, so with no projects the file
+  // would be completely blank — emit the header row explicitly instead.
+  const ws = rows.length > 0
+    ? XLSX.utils.json_to_sheet(rows)
+    : XLSX.utils.aoa_to_sheet([PORTFOLIO_HEADERS]);
+  const headers = rows.length > 0 ? Object.keys(rows[0]) : PORTFOLIO_HEADERS;
   ws['!cols'] = headers.map(h => ({
-    wch: Math.max(h.length + 2, ...rows.map(r => String((r as Record<string, unknown>)[h] ?? '').length + 1)),
+    wch: Math.max(h.length + 2, ...rows.map(r => String(r[h] ?? '').length + 1)),
   }));
 
   const wb = XLSX.utils.book_new();
@@ -929,23 +1011,7 @@ export async function exportPortfolioToPowerPoint(
     fontSize: 10, color: '605E5C', align: 'right',
   });
 
-  // ── Slide 2: Project Summary Table ─────────────────────────────────────────
-  const table = pptx.addSlide();
-  table.background = { color: 'FFFFFF' };
-
-  table.addShape(pptx.ShapeType.rect, {
-    x: 0, y: 0, w: 13.33, h: 0.75,
-    fill: { color: ACCENT }, line: { color: ACCENT, width: 0 },
-  });
-  table.addText(strings.Export_ProjectsSummaryHeader, {
-    x: 0.4, y: 0, w: 9, h: 0.75,
-    fontSize: 20, color: 'FFFFFF', bold: true, valign: 'middle',
-  });
-  table.addText(`${formatString(strings.Export_ProjectsCountLine, { count: projects.length })}  ·  ${format(today, 'MMM d, yyyy')}`, {
-    x: 0, y: 0, w: 13.0, h: 0.75,
-    fontSize: 12, color: 'FFFFFF', align: 'right', valign: 'middle', transparency: 35,
-  });
-
+  // ── Slide 2+: Project Summary Table (paginated) ────────────────────────────
   const COL_W = [3.0, 0.9, 1.0, 0.75, 0.75, 0.75, 0.75, 0.75, 0.75, 1.35];
   const HDR   = [
     strings.Export_TableProject, strings.Export_TableStatus, strings.Export_TableHealth, strings.Export_TableTotal,
@@ -989,13 +1055,131 @@ export async function exportPortfolioToPowerPoint(
     ];
   });
 
-  table.addTable([hdrRow, ...dataRows] as Parameters<typeof table.addTable>[0], {
-    x: 0.15, y: 0.9,
-    w: 13.0,
-    colW: COL_W,
-    rowH: Math.min(0.42, (7.5 - 1.1) / (projects.length + 1)),
-    fontSize: 10,
-  });
+  // A slide fits about 12 project rows plus the header row; longer lists
+  // continue on following slides (each repeats the header row) instead of
+  // shrinking rows until they overflow the slide.
+  const ROWS_PER_SLIDE = 12;
+  const pageCount = Math.max(1, Math.ceil(dataRows.length / ROWS_PER_SLIDE));
+  for (let page = 0; page < pageCount; page++) {
+    const table = pptx.addSlide();
+    table.background = { color: 'FFFFFF' };
+
+    table.addShape(pptx.ShapeType.rect, {
+      x: 0, y: 0, w: 13.33, h: 0.75,
+      fill: { color: ACCENT }, line: { color: ACCENT, width: 0 },
+    });
+    table.addText(pageCount > 1 ? `${strings.Export_ProjectsSummaryHeader} (${page + 1}/${pageCount})` : strings.Export_ProjectsSummaryHeader, {
+      x: 0.4, y: 0, w: 9, h: 0.75,
+      fontSize: 20, color: 'FFFFFF', bold: true, valign: 'middle',
+    });
+    table.addText(`${formatString(strings.Export_ProjectsCountLine, { count: projects.length })}  ·  ${format(today, 'MMM d, yyyy')}`, {
+      x: 0, y: 0, w: 13.0, h: 0.75,
+      fontSize: 12, color: 'FFFFFF', align: 'right', valign: 'middle', transparency: 35,
+    });
+
+    const pageRows = dataRows.slice(page * ROWS_PER_SLIDE, (page + 1) * ROWS_PER_SLIDE);
+    table.addTable([hdrRow, ...pageRows] as Parameters<typeof table.addTable>[0], {
+      x: 0.15, y: 0.9,
+      w: 13.0,
+      colW: COL_W,
+      rowH: 0.42,
+      fontSize: 10,
+    });
+  }
 
   await pptx.writeFile({ fileName: strings.Export_PortfolioReportFileName });
+}
+
+// ─── CSV / iCalendar exports ──────────────────────────────────────────────────
+
+// RFC 4180 quoting, plus a leading apostrophe on text that starts with a
+// formula trigger so Excel doesn't execute user-entered "=..." cells.
+function csvCell(value: string | number | boolean | null | undefined): string {
+  if (value === null || value === undefined) return '';
+  let text = String(value);
+  if (typeof value === 'string' && /^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function downloadCsv(headers: string[], rows: Array<Array<string | number | boolean | null | undefined>>, fileName: string): void {
+  const lines = [headers, ...rows].map(r => r.map(csvCell).join(','));
+  // UTF-8 BOM so Excel opens accented/non-Latin text correctly.
+  const blob = new Blob(['\uFEFF' + lines.join('\r\n') + '\r\n'], { type: 'text/csv;charset=utf-8' });
+  downloadBlob(blob, safeFileName(fileName));
+}
+
+/** Download the project's tasks as a CSV file (dates as yyyy-MM-dd; dependencies as "12,15SS+2"). */
+export function exportTasksCsv(project: IProject, tasks: ITask[]): void {
+  const headers = [
+    strings.Svc_ColId, ...TASK_EXPORT_HEADERS, strings.Svc_ColDependencies,
+    strings.Svc_ColBaselineStart, strings.Svc_ColBaselineDue,
+  ];
+  const rows = tasks.map(t => [
+    t.id, t.title, t.phase, t.startDate, t.dueDate, t.status, t.priority, t.assignedTo, t.assignedToEmail,
+    t.percentComplete, t.isMilestone ? strings.Export_Yes : strings.Export_No, t.description, t.notes,
+    serializeDependencies(t.dependencies || [], t.dependencyLinks),
+    t.baselineStart || '', t.baselineDue || '',
+  ]);
+  downloadCsv(headers, rows, `${project.title}${strings.Svc_CsvFileSuffix}`);
+}
+
+/** Download the portfolio summary (one row per project) as a CSV file. */
+export function exportProjectsCsv(
+  projects: IProject[],
+  statsMap: Map<number, IProjectTaskStats> | null
+): void {
+  const rows = portfolioRows(projects, statsMap, d => d);
+  downloadCsv(PORTFOLIO_HEADERS, rows.map(r => PORTFOLIO_HEADERS.map(h => r[h])), strings.Svc_PortfolioCsvFileName);
+}
+
+// iCalendar text values escape backslash, semicolon, comma and newlines.
+function icsText(v: string): string {
+  return String(v || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+}
+
+// Content lines are limited to 75 octets; fold longer ones with CRLF + space.
+function icsFold(line: string): string {
+  const parts: string[] = [];
+  let rest = line;
+  while (rest.length > 74) {
+    parts.push(rest.slice(0, 74));
+    rest = ` ${rest.slice(74)}`;
+  }
+  parts.push(rest);
+  return parts.join('\r\n');
+}
+
+function icsDate(iso: string): string {
+  return iso.replace(/-/g, '');
+}
+
+/** Download the project's milestones as an .ics calendar of all-day events. */
+export function exportMilestonesIcs(project: IProject, tasks: ITask[]): void {
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
+  const lines: string[] = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Smart Gantt//Milestones//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    `X-WR-CALNAME:${icsText(project.title)}`,
+  ];
+  tasks.filter(t => t.isMilestone).forEach(t => {
+    const dayStr = t.dueDate || t.startDate;
+    const day = parseDateOnly(dayStr);
+    if (!day) return;
+    lines.push(
+      'BEGIN:VEVENT',
+      `UID:${project.id}-${t.id}@smartgantt`,
+      `DTSTAMP:${stamp}`,
+      `DTSTART;VALUE=DATE:${icsDate(dateOnlyString(day))}`,
+      `DTEND;VALUE=DATE:${icsDate(dateOnlyString(addDays(day, 1)))}`,
+      `SUMMARY:${icsText(t.title)}`,
+    );
+    if (t.description) lines.push(`DESCRIPTION:${icsText(t.description)}`);
+    lines.push(`STATUS:${t.status === 'Cancelled' ? 'CANCELLED' : 'CONFIRMED'}`, 'TRANSP:TRANSPARENT', 'END:VEVENT');
+  });
+  lines.push('END:VCALENDAR');
+  const blob = new Blob([lines.map(icsFold).join('\r\n') + '\r\n'], { type: 'text/calendar;charset=utf-8' });
+  downloadBlob(blob, safeFileName(`${project.title}${strings.Svc_IcsFileSuffix}`));
 }

@@ -14,11 +14,11 @@
 .sectionTitle {
   font-size: 11px;
   font-weight: 700;
-  color: #605E5C;
+  color: var(--neutralSecondary, #605E5C);
   text-transform: uppercase;
   letter-spacing: 0.6px;
   padding-bottom: 6px;
-  border-bottom: 1px solid #EDEBE9;
+  border-bottom: 1px solid var(--neutralLight, #EDEBE9);
 }
 
 /* Option chips (color-by, bar style, week label) */
@@ -33,20 +33,20 @@
   align-items: center;
   gap: 5px;
   padding: 5px 12px;
-  border: 1px solid #C8C6C4;
+  border: 1px solid var(--neutralTertiaryAlt, #C8C6C4);
   border-radius: 14px;
   font-size: 12px;
   font-weight: 500;
-  color: #605E5C;
-  background: #fff;
+  color: var(--neutralSecondary, #605E5C);
+  background: var(--white, #fff);
   cursor: pointer;
   transition: all 0.12s;
 
-  &:hover { border-color: #0078D4; color: #0078D4; }
+  &:hover { border-color: var(--themePrimary, #0078D4); color: var(--themePrimary, #0078D4); }
 
   &.selected {
-    background: #0078D4;
-    border-color: #0078D4;
+    background: var(--themePrimary, #0078D4);
+    border-color: var(--themePrimary, #0078D4);
     color: #fff;
     font-weight: 600;
   }
@@ -76,14 +76,14 @@
   color: rgba(255,255,255,0.85);
 
   &.selected {
-    border-color: #323130;
-    outline: 2px solid #323130;
+    border-color: var(--neutralPrimary, #323130);
+    outline: 2px solid var(--neutralPrimary, #323130);
     outline-offset: 2px;
   }
 
   &.light {
-    color: #323130;
-    border-color: #C8C6C4;
+    color: var(--neutralPrimary, #323130);
+    border-color: var(--neutralTertiaryAlt, #C8C6C4);
   }
 }
 
@@ -96,12 +96,12 @@
 .heightBtn {
   flex: 1;
   padding: 8px 6px;
-  border: 1px solid #C8C6C4;
+  border: 1px solid var(--neutralTertiaryAlt, #C8C6C4);
   border-radius: 4px;
-  background: #fff;
+  background: var(--white, #fff);
   cursor: pointer;
   font-size: 11px;
-  color: #605E5C;
+  color: var(--neutralSecondary, #605E5C);
   text-align: center;
   transition: all 0.12s;
   display: flex;
@@ -109,12 +109,12 @@
   align-items: center;
   gap: 4px;
 
-  &:hover { border-color: #0078D4; color: #0078D4; }
+  &:hover { border-color: var(--themePrimary, #0078D4); color: var(--themePrimary, #0078D4); }
 
   &.selected {
-    border-color: #0078D4;
-    background: #EFF6FC;
-    color: #0078D4;
+    border-color: var(--themePrimary, #0078D4);
+    background: var(--themeLighter, #EFF6FC);
+    color: var(--themePrimary, #0078D4);
     font-weight: 600;
   }
 }
@@ -128,7 +128,7 @@
 
 .heightBar {
   width: 28px;
-  background: #0078D4;
+  background: var(--themePrimary, #0078D4);
   border-radius: 2px;
   opacity: 0.6;
 }
@@ -143,5 +143,16 @@
 
 .toggleLabel {
   font-size: 13px;
-  color: #323130;
+  color: var(--neutralPrimary, #323130);
+}
+
+@media (forced-colors: active) {
+  .chip.selected, .heightBtn.selected {
+    forced-color-adjust: none;
+    background: Highlight;
+    color: HighlightText;
+    border-color: Highlight;
+  }
+  .themeSwatch { forced-color-adjust: none; border-color: CanvasText; }
+  .themeSwatch.selected { outline-color: Highlight; border-color: Highlight; }
 }

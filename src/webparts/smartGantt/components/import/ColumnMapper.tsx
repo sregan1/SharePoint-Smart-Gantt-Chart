@@ -38,6 +38,9 @@ export const ColumnMapper: React.FC<IColumnMapperProps> = ({ source, mapping, on
     onChange(newMapping);
   };
 
+  const isRequired = (field: ImportableField | undefined): boolean =>
+    !!field && !!IMPORTABLE_FIELDS.find(f => f.key === field)?.required;
+
   const fieldLabel = (field: ImportableField): string => {
     const def = IMPORTABLE_FIELDS.find(f => f.key === field);
     return def ? def.label : field;
@@ -58,6 +61,10 @@ export const ColumnMapper: React.FC<IColumnMapperProps> = ({ source, mapping, on
           <span>{formatString(strings.ColumnMapper_SkippedColumnsBanner, { count: skippedCount })}</span>
         </div>
       )}
+
+      <div style={{ fontSize: 11, color: 'var(--neutralSecondary, #605E5C)', marginBottom: 6 }}>
+        <span aria-hidden="true" style={{ color: '#A4262C', fontWeight: 700 }}>*</span> {strings.Import_Mapper_RequiredLegend}
+      </div>
 
       {/* Header row */}
       <div className={styles.mapperHeader}>
@@ -83,6 +90,7 @@ export const ColumnMapper: React.FC<IColumnMapperProps> = ({ source, mapping, on
             <select
               className={styles.targetSelect}
               value={mapped || 'skip'}
+              aria-label={formatString(strings.Import_Mapper_SelectAriaLabel, { columnName: header })}
               onChange={e => handleChange(header, e.target.value as ImportableField)}
             >
               {IMPORTABLE_FIELDS.map(f => (
@@ -99,6 +107,16 @@ export const ColumnMapper: React.FC<IColumnMapperProps> = ({ source, mapping, on
                   {wasAutoMapped ? `✓ ${strings.ColumnMapper_AutoMappedBadge}` : `✓ ${strings.ColumnMapper_SetBadge}`}
                 </span>
               )}
+              {isRequired(mapped) && (
+                <span
+                  role="img"
+                  aria-label={strings.Import_Mapper_RequiredMarkerLabel}
+                  title={strings.Import_Mapper_RequiredMarkerLabel}
+                  style={{ color: '#A4262C', fontWeight: 700, marginLeft: 6 }}
+                >
+                  *
+                </span>
+              )}
             </span>
           </div>
         );
@@ -107,9 +125,7 @@ export const ColumnMapper: React.FC<IColumnMapperProps> = ({ source, mapping, on
       {/* Preview */}
       {previewCols.length > 0 && previewRows.length > 0 && (
         <div className={styles.previewSection}>
-          {/* NOTE: no loc key matches "Preview (first N rows)" — ColumnMapper_PreviewTitle is
-              worded for a single column name ("Preview: {columnName}"). Left hardcoded; see report. */}
-          <div className={styles.previewTitle}>Preview (first {Math.min(PREVIEW_ROWS, previewRows.length)} rows)</div>
+          <div className={styles.previewTitle}>{formatString(strings.Import_Mapper_PreviewFirstRows, { count: Math.min(PREVIEW_ROWS, previewRows.length) })}</div>
           <div style={{ overflowX: 'auto' }}>
             <table className={styles.previewTable}>
               <thead>

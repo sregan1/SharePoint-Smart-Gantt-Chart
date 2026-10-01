@@ -1,21 +1,21 @@
 .smartGantt {
   font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
-  background: #ffffff;
-  border: 1px solid #EDEBE9;
+  background: var(--white, #ffffff);
+  border: 1px solid var(--neutralLight, #EDEBE9);
   border-radius: 8px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   height: calc(100vh - 120px);
   min-height: 500px;
-  color: #323130;
+  color: var(--neutralPrimary, #323130);
 }
 
 .webPartTitle {
   padding: 10px 16px 0;
   font-size: 15px;
   font-weight: 600;
-  color: #323130;
+  color: var(--neutralPrimary, #323130);
   flex-shrink: 0;
 }
 
@@ -26,7 +26,7 @@
   justify-content: center;
   flex: 1;
   gap: 16px;
-  color: #605E5C;
+  color: var(--neutralSecondary, #605E5C);
 }
 
 .errorContainer {
@@ -43,11 +43,11 @@
 .errorTitle {
   font-size: 18px;
   font-weight: 600;
-  color: #D13438;
+  color: var(--sg-critical, #D13438);
 }
 
 .errorMessage {
-  color: #605E5C;
+  color: var(--neutralSecondary, #605E5C);
   max-width: 400px;
 }
 
@@ -65,18 +65,18 @@
 .emptyIcon {
   font-size: 64px;
   opacity: 0.3;
-  color: #0078D4;
+  color: var(--themePrimary, #0078D4);
 }
 
 .emptyTitle {
   font-size: 22px;
   font-weight: 600;
-  color: #323130;
+  color: var(--neutralPrimary, #323130);
 }
 
 .emptySubtitle {
   font-size: 14px;
-  color: #605E5C;
+  color: var(--neutralSecondary, #605E5C);
   max-width: 400px;
   line-height: 1.6;
 }
@@ -86,4 +86,17 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+@media (forced-colors: active) {
+  .smartGantt {
+    border-color: CanvasText;
+  }
+}
+
+@media print {
+  .smartGantt {
+    height: auto;
+    border: none;
+  }
 }

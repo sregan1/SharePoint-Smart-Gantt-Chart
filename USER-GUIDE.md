@@ -1,4 +1,4 @@
-# Smart Gantt Chart — User Guide · v1.4.0
+# Smart Gantt Chart — User Guide · v1.5.0
 
 ---
 
@@ -46,7 +46,7 @@ Guests who have been invited to the SharePoint site and granted **Site Member (C
 - Add, edit, and delete tasks
 - Export to Excel, PowerPoint, and PNG
 - Import tasks from an Excel or CSV file
-- Be listed as "Assigned To" on any task — this field is plain text and requires no Azure AD account lookup
+- Be listed as "Assigned To" on any task — type the person's name (and optionally an email) as free text; no Azure AD account lookup is required
 
 ### What guests cannot do
 
@@ -77,7 +77,8 @@ Guests who have been invited to the SharePoint site and granted **Site Member (C
    | **Project Name** | Required. Shown in the title bar and project selector. |
    | **Description** | Optional. A short summary of what the project is about. |
    | **Color** | Pick a color — it's used as the project accent color throughout the Gantt view. |
-   | **Status** | Planning, Active, On Hold, Completed, or Cancelled. |
+   | **Project Manager** | Optional. Search your directory as you type, or enter a name (with an optional email) for someone outside it. |
+   | **Status** | Planning, Active, On Hold, Completed, or Canceled. |
    | **Start Date / Due Date** | Optional project-level date range. |
 
 3. Click **Create Project**.
@@ -103,10 +104,10 @@ Click **+ Add Task** in the toolbar. The task panel slides in from the right wit
 | **Task Name** | Required. Keep it short — it's what appears on the Gantt bar. |
 | **Description** | Optional longer description. |
 | **Start Date / Due Date** | Used to position and size the bar on the Gantt chart. |
-| **Status** | Not Started · In Progress · Completed · On Hold · Cancelled |
+| **Status** | Not Started · In Progress · Completed · On Hold · Canceled |
 | **Priority** | Critical · High · Medium · Low |
 | **% Complete** | Drag the slider 0–100. Setting Status to Completed auto-sets this to 100. |
-| **Assigned To** | Start typing — the field suggests people already assigned to tasks in this project. |
+| **Assigned To** | People picker — start typing to search your directory, or pick from recently used people. For someone who isn't in the directory, choose **Use "name" (external / not in directory)** and optionally add an email; they're saved as free text. |
 
 #### Details tab
 
@@ -126,7 +127,21 @@ Click **+ Add Task** in the toolbar. The task panel slides in from the right wit
 | Field | Notes |
 |---|---|
 | **Parent Task** | Makes this task a sub-task of another. Sub-tasks are indented under their parent in all views. |
-| **Depends On** | Select tasks that must be completed before this one can start. Selected tasks appear as removable chips — click **×** to remove one. Dependency arrows are drawn on the Gantt chart. |
+| **Depends On** | Select the tasks this one depends on. Each appears as a removable row — click **×** to remove it. For each link, choose a **link type** and a **lag** (see below). Dependency arrows are drawn on the Gantt chart. |
+| **Baseline** | Shows the baseline start and finish (if a baseline has been set) and how many working days earlier or later the task now finishes. |
+
+**Link types and lag**
+
+| Type | Meaning |
+|---|---|
+| **Finish to Start (FS)** | This task starts after the predecessor finishes (default) |
+| **Start to Start (SS)** | This task starts when the predecessor starts |
+| **Finish to Finish (FF)** | This task finishes when the predecessor finishes |
+| **Start to Finish (SF)** | This task finishes when the predecessor starts |
+
+Lag is measured in working days; use a negative number for lead time. Links are stored in the task's `Dependencies` column in a compact form such as `12,15SS+2` (a plain ID means FS with no lag). A task can have roughly 60 dependencies.
+
+Working days follow the [working calendar](#11-display-settings) configured in the web part property pane.
 
 ### Editing a task
 
@@ -137,18 +152,27 @@ Click **+ Add Task** in the toolbar. The task panel slides in from the right wit
 ### Quick edits without opening the panel
 
 - **Status / Priority (List view):** Click the Status or Priority cell and change it inline — saves immediately.
-- **Move dates (Gantt view):** Drag a bar left or right to shift its dates.
+- **Move dates (Gantt view):** Drag a bar left or right to shift its dates. Tasks that depend on it shift too, and you can click **Undo**.
 - **Resize duration (Gantt view):** Drag the right edge of a bar to extend or shorten it.
+- **Create a task (Gantt view):** Drag across an empty row to create a task with those dates.
 - **Change status (Kanban view):** Drag the card to a different column.
+- **Bulk edit (List view):** Tick several rows and set status, priority, % complete, or assignee for all of them at once.
+- **Undo / Redo:** Use the toolbar buttons or **Ctrl+Z** / **Ctrl+Y** to step back or forward through your last 50 changes.
 
 ### Deleting a task
 
 - **Gantt / List view:** Hover over a task row to reveal the **✕** button and click it.
+- **List view (several tasks):** Tick the rows, then choose **Delete selected** in the bulk action bar and confirm.
 - **Task panel:** There is no delete button in the panel — delete from the row hover action.
 
 ### If you see "changed by someone else"
 
-If two people edit the same task or project at nearly the same time, whoever saves second will see a message like *"This task was changed by someone else since you loaded it. Refresh and try again."* This protects the first person's changes from being silently overwritten. If you see this message, refresh the project (switch away and back, or reload the page) to pick up the latest version, then re-apply your edit.
+If two people edit the same task or project at nearly the same time, whoever saves second will see a message and the save is rejected. This protects the first person's changes from being silently overwritten.
+
+- **Tasks:** you'll see *"This task was changed by someone else. The latest tasks have been reloaded — review them and try again."* The task list reloads automatically; re-apply your edit. Saves to the same task are also queued one at a time, so rapid successive edits don't collide with each other.
+- **Projects:** you'll see *"This project was changed by someone else since you opened it. Refresh and try again."* Refresh the project (switch away and back, or reload the page), then re-apply your edit.
+
+If SharePoint throttles a request (HTTP 429, 503, or 504), the web part retries automatically with a short delay.
 
 ---
 
@@ -174,6 +198,8 @@ The **Filter Bar** appears as a third row in the toolbar whenever a project has 
 - Active filters are highlighted in **blue** with the filter name and a count (e.g., **Status (2)**).
 - When any filter is active, a **match count** appears to the right of the controls (e.g., *5 of 20*).
 - Click **✕ Clear filters** to reset everything at once.
+- Filters reset automatically when you switch to a different project.
+- Use **🔗 Copy Link** in the ⋯ menu to share a link that opens the same project, view, zoom level, and filters.
 - Click an active chip's count badge to open its dropdown and adjust the selection.
 
 ### Tips
@@ -215,7 +241,10 @@ The Gantt view is the heart of the web part. Switch to it using the **Gantt** bu
 | Scroll horizontally | Mouse wheel or scrollbar on the timeline |
 | Scroll vertically | Mouse wheel or scrollbar; left panel and timeline scroll together |
 | Jump to today | Click **◉ Today** on the toolbar |
-| Zoom in/out | Click **Day · Week · Month · Quarter** on the toolbar |
+| Zoom in/out | Click **Day · Week · Month · Quarter** on the toolbar, or hold **Ctrl** and use the mouse wheel |
+| Fit the whole project | Click **Fit** on the toolbar |
+| Collapse / expand all phases | Use the **Collapse all phases** / **Expand all phases** button (your choice is remembered per project) |
+| Undo / Redo | Toolbar buttons, or **Ctrl+Z** / **Ctrl+Y** |
 
 ### Zoom levels
 
@@ -230,8 +259,12 @@ The Gantt view is the heart of the web part. Switch to it using the **Gantt** bu
 
 - The **colored fill** shows progress (% complete).
 - The **lighter background** is the full planned duration.
-- **Drag horizontally** to move the task's start and end dates together.
+- **Drag horizontally** to move the task's start and end dates together. A live date label follows the bar, and the timeline scrolls automatically when you drag near its edge. Press **Esc** to cancel; only the primary mouse button starts a drag.
 - **Drag the right edge** to change only the end date.
+- **Drag across an empty row** to create a new task with those dates.
+- **Drag the link handle** from a bar onto another task to create a dependency. Circular or duplicate links are rejected with a message.
+- **Move dependents automatically:** when you drop a bar, tasks that depend on it shift to keep their links satisfied. A message shows how many moved, with an **Undo** button.
+- **From the keyboard:** Tab to a bar, then press **Left** / **Right** to move it one working day, **Shift + Left** / **Shift + Right** to change its end date, or **Enter** to open it.
 - **Hover** over any bar to see a tooltip with full task details.
 - On a **touchscreen or with a pen**, the same drag and resize gestures work — touch and drag a bar to move it, or drag its right edge to resize.
 
@@ -243,11 +276,19 @@ A task with **Milestone** toggled on (Details tab of the task panel) renders as 
 
 ### Phase groups
 
-Tasks with the same Phase value are grouped under a labeled section header. Click the **▶ / ▼** arrow on the left to collapse or expand a phase group.
+Tasks with the same Phase value are grouped under a labeled section header. Click the **▶ / ▼** arrow on the left to collapse or expand a phase group, or use **Collapse all / Expand all**. If a task's parent chain is circular (A under B under A), the task is shown at the top level with a warning tooltip instead of being hidden.
 
 ### Dependencies
 
-When a task is set to depend on another, an orthogonal connector line is drawn from the predecessor bar to the start of the dependent task. Lines use only horizontal and vertical segments — right-angle elbows for forward dependencies, and routed paths that stay between rows for backward dependencies. These are informational — moving bars does not automatically enforce date constraints.
+When a task is set to depend on another, an orthogonal connector line is drawn from the predecessor bar to the start of the dependent task. Lines use only horizontal and vertical segments — right-angle elbows for forward dependencies, and routed paths that stay between rows for backward dependencies. Arrows reflect each link's type (FS, SS, FF, or SF) and lag. When you move a bar, its dependents are shifted automatically (with **Undo**).
+
+### Critical path
+
+Turn on **Critical path highlight** in Display Settings to color the critical path's bars and arrows red. The Dashboard also lists the critical path tasks.
+
+### Baselines
+
+Use **📐 Set Baseline…** in the ⋯ menu to save the current start and due dates of all tasks as the baseline (any existing baseline is replaced). The Gantt then draws baseline bars for each task; hover to see the baseline dates and the finish variance in days. The task panel's Links tab shows the same variance. If your account can't edit the list's columns, baselines may be unavailable for that project.
 
 ---
 
@@ -268,6 +309,20 @@ Click any column header to sort by that column. Click again to reverse the order
 
 Changes save to SharePoint in the background. No need to open the task panel for quick status updates.
 
+### Bulk edit and bulk delete
+
+Tick the checkbox on individual rows (or the header checkbox to select all). A bulk action bar shows the number selected and lets you:
+
+- Set **status** or **priority**
+- Set **% complete**
+- **Assign** to a person
+- **Delete selected** (you'll be asked to confirm)
+- **Clear selection**
+
+### Export CSV
+
+Click **Export CSV** to download the tasks as a CSV file.
+
 ### Reading the columns
 
 | Column | Notes |
@@ -276,7 +331,7 @@ Changes save to SharePoint in the background. No need to open the task panel for
 | Status | Color-coded badge; click to change inline |
 | Health | Automatic On Track / At Risk / Overdue badge — see [Health Status Indicators](#10-health-status-indicators) |
 | Priority | Click to change inline |
-| Start / Due | Due dates shown in red if overdue |
+| Start / Due | Due dates shown in red if overdue; dates on non-working days are marked |
 | Assigned To | Avatar + first name |
 | Progress | Mini progress bar + percentage |
 | Phase | Phase label |
@@ -298,9 +353,21 @@ The Kanban view organizes tasks as cards across five status columns. Switch to i
 | In Progress | Active work |
 | On Hold | Paused or blocked |
 | Completed | Done |
-| Cancelled | No longer needed |
+| Canceled | No longer needed (the column can be collapsed) |
 
-The number badge on each column header shows the task count.
+The number badge on each column header shows the task count. Click the collapse arrow on the Canceled column to fold it away.
+
+### WIP limits
+
+Click **WIP** on a column header to set a work-in-progress limit (0 means no limit). The header then shows *WIP count/limit* and warns when the column is over its limit.
+
+### Swimlanes
+
+Use the **Swimlanes** selector to split the board into horizontal lanes by **Phase** or **Assignee** (or **None**). Tasks with no phase or assignee appear in a *No phase* or *Unassigned* lane.
+
+### Adding a task in a column
+
+Click **Add Task** in a column to open the task panel with that column's status already selected.
 
 ### Moving tasks
 
@@ -328,8 +395,13 @@ The Dashboard view gives you a quick snapshot of a single project's health and r
 
 ### What it shows
 
-- **Summary stats** — task counts broken down by status (Not Started, In Progress, Completed, On Hold, Cancelled) and by health (On Track, At Risk, Overdue, Done)
+- **Summary stats** — task counts broken down by status (Not Started, In Progress, Completed, On Hold, Canceled) and by health (On Track, At Risk, Overdue, Done)
 - **Overall progress** — a project-level progress bar based on average % complete across all tasks
+- **Phase progress** — done/total and percent per phase. Progress counts leaf tasks only (parents with sub-tasks are excluded) and ignores canceled tasks
+- **Overdue tasks** — listed oldest first
+- **Burndown** — remaining tasks over time against an ideal line (needs enough dated tasks)
+- **Workload by Assignee** — open and overdue task counts per person
+- **Critical Path** — the tasks on the project's critical path
 - **Recent activity** — a feed of tasks that were completed or updated recently, with assignee and due date
 
 ### When to use it
@@ -373,8 +445,14 @@ Use the sort buttons in the Portfolio header to order cards by:
 
 - **A–Z** — alphabetical by project name
 - **Health** — worst health first (Overdue → At Risk → On Track → Done)
-- **Status** — alphabetical by status
+- **Status** — lifecycle order (Planning, Active, On Hold, Completed, Canceled)
 - **% Done** — highest completion first
+
+Your chosen sort order is remembered.
+
+### Searching and hiding
+
+Use the **Search projects…** box to find a project by name, and the **Hide completed / canceled** toggle to hide finished projects. The header shows how many projects match (e.g. *3 of 12 Projects*), and **Clear filters** resets both.
 
 Click **↻ Refresh** to reload stats for all projects. Stats are also refreshed automatically after any task or project is created, edited, or deleted.
 
@@ -388,7 +466,7 @@ Health status is **computed automatically** from task dates and % complete. It i
 
 | Health | Condition |
 |---|---|
-| **Done** | Task status is Completed or Cancelled |
+| **Done** | Task status is Completed or Canceled |
 | **Overdue** | Due date is in the past and the task is not complete |
 | **At Risk** | Start date has passed but the task is still Not Started — OR — % complete is more than 10% behind what would be expected given the time elapsed between start and due date |
 | **On Track** | Everything else in progress |
@@ -422,7 +500,7 @@ Controls what determines a task bar's color.
 
 | Option | What it does |
 |---|---|
-| **By Status** | Not Started = gray · In Progress = blue · Completed = green · On Hold = orange · Cancelled = red |
+| **By Status** | Not Started = gray · In Progress = blue · Completed = green · On Hold = orange · Canceled = red |
 | **By Priority** | Critical = red · High = orange · Medium = blue · Low = green |
 | **By Phase** | Each phase name is hashed to a consistent color from a 15-color palette |
 | **By Health** | On Track = blue · At Risk = orange · Overdue = red · Done = green |
@@ -466,6 +544,18 @@ Project weeks count from the Monday of or before the earliest task start date.
 | Assignee name on bars | Shows the assignee's name inside or beside the bar |
 | Health status badges | On Track / At Risk / Overdue badges in List, Kanban, and Gantt tooltip |
 
+Settings are remembered in your browser's local storage. Colors follow the SharePoint site theme, and the chart adapts to high-contrast mode.
+
+### Web part property pane (page editors)
+
+Site owners and page editors can set these in the web part's property pane while editing the page:
+
+| Setting | What it does |
+|---|---|
+| **Default view** | The view shown first: Gantt, List, Kanban, Dashboard, or Portfolio. A viewer's own remembered choice or a shared link takes priority |
+| **Default zoom** | The Gantt zoom shown first: Day, Week, Month, or Quarter |
+| **Working calendar** | Toggle each weekday as a working day (Monday–Friday by default) and list holidays, one `yyyy-MM-dd` date per line (for example `2026-12-25`). Keyboard moves, dependency lag, and auto-shifted dependents skip non-working days |
+
 ---
 
 ## 12. Exporting
@@ -481,6 +571,22 @@ Downloads `<Project Name> - Tasks.xlsx` with all tasks in a spreadsheet. Columns
 Task Name · Phase · Start Date · Due Date · Status · Priority · Assigned To · Assigned To (Email) · % Complete · Is Milestone · Description · Notes
 
 Column widths are auto-sized to fit the content. The file opens directly in Excel, Google Sheets, or any spreadsheet application.
+
+### Export Tasks to CSV
+
+Downloads `<Project Name> - Tasks.csv` (also available as **Export CSV** in the List view). It includes the task columns plus ID, Dependencies, Baseline Start, and Baseline Due.
+
+### Export Milestones (iCal)
+
+Downloads `<Project Name> - Milestones.ics` containing the project's milestones, which you can import into Outlook, Google Calendar, or any calendar app.
+
+### Print / Save as PDF
+
+Choose **🖨 Print / Save as PDF** to open the print dialog for the Gantt chart; pick *Save as PDF* as the printer to create a PDF. If nothing opens, allow pop-ups for the site and try again.
+
+### Portfolio exports
+
+In Portfolio view, the ⋯ menu exports the whole portfolio as Excel, CSV (`Portfolio Summary.csv`), or PowerPoint. The Excel file includes its header row even when there are no projects, and the PowerPoint table continues onto additional slides when there are many projects. Colors are validated on export so a malformed color can't break the file.
 
 ### Export to PowerPoint
 
@@ -556,7 +662,11 @@ If the importer can't automatically match all columns, you'll see the Column Map
 - **Green "Auto" badges** = matched automatically (e.g. "Task Name" → Title, "Owner" → Assigned To)
 - **Unmatched columns** = use the dropdown to pick the right Smart Gantt field, or choose "Skip this column"
 - A **preview** of the first 3 rows with your current mapping is shown at the bottom
-- **Task Name is required** — you'll see a warning if it isn't mapped
+- **Task Name is required** — required fields are marked, and you'll see a warning if one isn't mapped
+
+**Date order.** If your file has dates written with numbers (such as 03/04/2026), choose how to read them: **Auto-detect** (the panel tells you what it detected), **Month/Day/Year**, or **Day/Month/Year**.
+
+**Dependencies.** Predecessors can be row numbers, task titles, or MS Project style entries such as `3FS+2d` (task 3, Finish to Start, 2 days lag). Numeric predecessors refer to the row's original position in your spreadsheet. Any predecessor that can't be matched, or that points to the task itself, is skipped and reported as a warning.
 
 Common mappings you might need to set manually:
 
@@ -570,11 +680,13 @@ Common mappings you might need to set manually:
 
 ### Step 3 — Import
 
+Before importing, a validation preview lists rows with problems — a missing task name, an invalid start or due date, or a due date before the start date. Tick **Skip rows with problems** to leave those rows out.
+
 Click **Import N Tasks**. A progress bar shows tasks being created. Large imports may take a minute.
 
 ### Step 4 — Done
 
-The results screen shows how many tasks were successfully added and lists any rows that failed (e.g. missing required data). Click **View Imported Tasks** to see them on the Gantt.
+The results screen shows how many tasks were successfully added, lists any rows that failed (e.g. missing required data), and shows any warnings (for example unresolved dependencies). The failed-row and warning lists can be selected, and each has a **Copy details** button that copies the full text to the clipboard — handy for sharing an error with your administrator. Click **View Imported Tasks** to see them on the Gantt.
 
 ### IT Setup for Planner Import
 
@@ -620,7 +732,15 @@ Each project is stored in its own SharePoint list, so tasks from different proje
 - **List view column headers** — Tab to a column header and press **Enter** or **Space** to sort by it, same as clicking.
 - **Kanban cards** — Tab to a card. Press **Enter** to open it in the task panel. Press the **Left** or **Right** arrow key to move it to the previous or next status column (the same status/progress rules as dragging apply — see [Kanban View](#7-kanban-view)).
 - **Toolbar menus** — The project selector and the **⋯** menus can be opened with Enter or Space once focused, and every item inside them is reachable with Tab and activated with Enter or Space.
-- **Gantt bars** are not yet keyboard-movable — moving or resizing a bar still requires a mouse, touch, or pen. Use the row's **✏ Edit** button (reachable by keyboard) to change a task's dates from the task panel instead.
+- **Gantt bars** — Tab to a bar, then press **Left** / **Right** to move it one working day, **Shift + Left** / **Shift + Right** to change its end date, or **Enter** to open the task. The new dates are announced to screen readers.
+- **List view bulk selection** — every row checkbox, the select-all checkbox, and the bulk action bar are labeled and keyboard-operable.
+- **Kanban** — WIP limit fields and the **Add Task** button in each column have accessible labels; the Edit and Delete buttons on a card no longer also trigger the card's own Enter/arrow actions.
+- **People picker** — the suggestion list has an accessible label and the number of suggestions is announced to screen readers.
+- **Drag cancel** — press **Esc** during a Gantt drag to cancel it.
+
+### Themes and high contrast
+
+Colors follow the SharePoint site theme, and the web part adapts to Windows high-contrast mode.
 
 ### Touch and pen support
 
@@ -665,13 +785,25 @@ Switch Week Numbering to **Project Weeks** before exporting. "Complete by W6" is
 Use the **Parent Task** field to create a hierarchy. The parent task's dates should span all its sub-tasks. Sub-tasks appear indented in both the Gantt and List views.
 
 **Bulk status updates via List view**
-Need to mark 10 tasks as Completed? Switch to List view and update each status cell inline — faster than opening each task panel individually.
+Need to mark 10 tasks as Completed? Switch to List view, tick the rows, and use the bulk action bar to set the status for all of them at once.
+
+**Set a baseline before the plan starts to slip**
+Once your plan is agreed, use **Set Baseline…** in the ⋯ menu. The Gantt then shows how far each task has drifted from the original dates.
+
+**Set your working calendar once**
+If your team doesn't work Monday to Friday, or has company holidays, edit the web part's property pane so lag, keyboard moves, and auto-shifted dependents skip non-working days.
+
+**Share exactly what you're looking at**
+Use **🔗 Copy Link** in the ⋯ menu to send a colleague a link that opens the same project, view, zoom, and filters.
+
+**Mistakes happen — Undo**
+Dragged the wrong bar? Press **Ctrl+Z** (or the Undo button). Dependent tasks that were shifted move back with it.
 
 **Import to seed a new project**
 Start a project in Excel with your work breakdown structure, then import it. Mapping takes less than a minute and saves a lot of manual entry.
 
 **The ⋯ menu**
-The three-dot menu in the top-right of the toolbar contains all the less-common actions: Import Tasks, Export to Excel, Export to PowerPoint, Export as Image, Edit Project, Archive Project, and Send to Recycle Bin. In Portfolio view, the same ⋯ menu contains Export to Excel and Export to PowerPoint for the full portfolio.
+The three-dot menu in the top-right of the toolbar contains all the less-common actions: Import Tasks, Export to Excel, Export Tasks to CSV, Export to PowerPoint, Export as Image, Export Milestones (iCal), Print / Save as PDF, Set Baseline, Copy Link, Edit Project, Archive Project, and Send to Recycle Bin. In Portfolio view, the same ⋯ menu contains the Excel, CSV, and PowerPoint exports for the full portfolio.
 
 **Archive projects you no longer actively manage**
 Rather than deleting a completed or cancelled project, use **Archive Project** to hide it from view. It stays in SharePoint and can be restored at any time via **Show archived projects** in the project selector. This is safer than deleting and keeps historical task data intact.

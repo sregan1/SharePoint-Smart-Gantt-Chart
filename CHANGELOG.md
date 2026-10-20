@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.5.1] - 2026-10-19
+
+### Fixed
+
+- **Gantt scroll alignment at the bottom** — scrolling to the end of a long task list no longer leaves the task names and the timeline rows out of line; both panels now stop at the same position
+
+---
+
 ## [1.5.0] - 2026-10-01
 
 ### Added

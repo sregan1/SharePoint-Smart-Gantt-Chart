@@ -5,7 +5,7 @@
 [![Download](https://img.shields.io/badge/Download-Latest%20Release-CA5010?style=for-the-badge&logo=github&logoColor=white)](../../releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 
-A SharePoint Framework (SPFx) web part for project management with five views — Portfolio, Gantt chart, List, Kanban board, and Dashboard — all backed by SharePoint lists. Current release: **v1.5.0** (see the [Changelog](CHANGELOG.md)).
+A SharePoint Framework (SPFx) web part for project management with five views — Portfolio, Gantt chart, List, Kanban board, and Dashboard — all backed by SharePoint lists. Current release: **v1.5.1** (see the [Changelog](CHANGELOG.md)).
 
 ![SPFx](https://img.shields.io/badge/SPFx-1.20.0-0078D4?logo=microsoft&logoColor=white) ![Node](https://img.shields.io/badge/Node-18.x-339933?logo=nodedotjs&logoColor=white) ![React](https://img.shields.io/badge/React-17-61DAFB?logo=react&logoColor=black) ![TypeScript](https://img.shields.io/badge/TypeScript-4.7-3178C6?logo=typescript&logoColor=white) ![PnPjs](https://img.shields.io/badge/PnPjs-3.26-orange) ![pptxgenjs](https://img.shields.io/badge/pptxgenjs-4.0-blueviolet)
 

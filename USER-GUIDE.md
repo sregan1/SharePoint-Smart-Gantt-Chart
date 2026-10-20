@@ -1,4 +1,4 @@
-# Smart Gantt Chart — User Guide · v1.5.0
+# Smart Gantt Chart — User Guide · v1.5.1
 
 ---
 

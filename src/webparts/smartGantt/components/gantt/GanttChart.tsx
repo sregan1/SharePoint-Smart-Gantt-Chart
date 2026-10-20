@@ -338,6 +338,24 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
   const svgBodyHeight = visibleTasks.length * ROW_H;
   const bodyHeight = Math.max(svgBodyHeight + 60, 400);
 
+  // The right panel's horizontal scrollbar shrinks its viewport, so it can scroll further than the
+  // left panel. Measure it and lengthen the left content by the same amount so both reach the same
+  // max scrollTop (max = content - viewport; the left viewport is taller by the scrollbar height).
+  const [hScrollbarH, setHScrollbarH] = React.useState(0);
+  React.useLayoutEffect(() => {
+    const el = bodyScrollRef.current;
+    if (!el) return;
+    const measure = (): void => {
+      const h = el.offsetHeight - el.clientHeight;
+      setHScrollbarH(prev => (prev === h ? prev : h));
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [tasks.length > 0, bodyHeight]);
+
   const taskById = React.useMemo(() => new Map(tasks.map(t => [t.id, t])), [tasks]);
   const rowIndexById = React.useMemo(() => {
     const map = new Map<number, number>();
@@ -1261,14 +1279,16 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
             onScroll={handleLeftScroll}
             style={{ overflowY: 'auto' }}
           >
-            <div style={{ height: svgBodyHeight, position: 'relative' }}>
-              <div style={{ position: 'absolute', top: rowStart * ROW_H, left: 0, right: 0 }}>
-                {renderLeftRows()}
+            <div style={{ height: bodyHeight + hScrollbarH, overflow: 'hidden' }}>
+              <div style={{ height: svgBodyHeight, position: 'relative' }}>
+                <div style={{ position: 'absolute', top: rowStart * ROW_H, left: 0, right: 0 }}>
+                  {renderLeftRows()}
+                </div>
               </div>
+              <button className={styles.addTaskRowBtn} onClick={onAddTask}>
+                {strings.Gantt_AddTaskButton}
+              </button>
             </div>
-            <button className={styles.addTaskRowBtn} onClick={onAddTask}>
-              {strings.Gantt_AddTaskButton}
-            </button>
           </div>
         </div>
 

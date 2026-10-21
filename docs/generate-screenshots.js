@@ -141,8 +141,9 @@ function ganttSVG() {
     bars.push(
       `<rect x="0" y="${y0}" width="${LW}" height="${RH}" fill="${i%2===0?'#FFFFFF':'#FAFAFA'}"/>`,
       `<line x1="0" y1="${y0+RH}" x2="${LW}" y2="${y0+RH}" stroke="#F3F2F1" stroke-width="1"/>`,
-      `<circle cx="10" cy="${y0+RH/2}" r="4" fill="${sc}"/>`,
-      `<text x="22" y="${y0+RH/2+4}" font-size="12" fill="#323130" font-family="Segoe UI,sans-serif">${t.title.substring(0,36)}</text>`,
+      `<text x="4" y="${y0+RH/2+5}" font-size="14" fill="#A19F9D" font-family="Segoe UI,sans-serif">⠿</text>`,
+      `<circle cx="28" cy="${y0+RH/2}" r="4" fill="${sc}"/>`,
+      `<text x="40" y="${y0+RH/2+4}" font-size="12" fill="#323130" font-family="Segoe UI,sans-serif">${t.title.substring(0,32)}</text>`,
     );
     const s = new Date(t.start), e = new Date(t.end);
     const bx = LW + days(s)*D;
@@ -434,7 +435,7 @@ function listPage(filterState = 'neutral') {
   let lastPhase = null;
   for (const t of visibleTasks) {
     if (t.phase !== lastPhase) {
-      rows += `<tr style="background:#F3F2F1;"><td colspan="9" style="padding:6px 12px;font-size:11px;font-weight:700;color:#605E5C;letter-spacing:0.5px;">${t.phase.toUpperCase()}</td></tr>`;
+      rows += `<tr style="background:#F3F2F1;"><td colspan="10" style="padding:6px 12px;font-size:11px;font-weight:700;color:#605E5C;letter-spacing:0.5px;">${t.phase.toUpperCase()}</td></tr>`;
       lastPhase = t.phase;
     }
     const sc = STATUS_COLOR[t.status], sbg = STATUS_BG[t.status];
@@ -443,6 +444,7 @@ function listPage(filterState = 'neutral') {
     const health = computeHealth(t);
     const isSel = filterState === 'neutral' && (t.id === 3 || t.id === 4);
     rows += `<tr style="border-bottom:1px solid #F3F2F1;${isSel?'background:#EFF6FC;':''}">
+      <td style="padding:10px 0 10px 8px;width:18px;color:#A19F9D;font-size:14px;line-height:1;">⠿</td>
       <td style="padding:10px 0 10px 12px;width:28px;"><input type="checkbox" ${isSel?'checked':''} style="accent-color:${PROJECT.color};"/></td>
       <td style="padding:10px 12px;display:flex;align-items:center;gap:8px;">
         <span style="width:8px;height:8px;border-radius:50%;background:${sc};display:inline-block;flex-shrink:0;"></span>
@@ -481,6 +483,7 @@ function listPage(filterState = 'neutral') {
       <table style="width:100%;border-collapse:collapse;">
         <thead>
           <tr style="background:#F3F2F1;border-bottom:1px solid #EDEBE9;">
+            <th style="padding:10px 0 10px 8px;width:18px;"></th>
             <th style="padding:10px 0 10px 12px;width:28px;"><input type="checkbox" style="accent-color:${PROJECT.color};"/></th>
             <th style="padding:10px 12px;font-size:11px;font-weight:600;color:#605E5C;text-align:left;min-width:250px;">TASK NAME ↑</th>
             <th style="padding:10px 12px;font-size:11px;font-weight:600;color:#605E5C;text-align:left;">STATUS</th>

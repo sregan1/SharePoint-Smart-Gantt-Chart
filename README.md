@@ -5,7 +5,7 @@
 [![Download](https://img.shields.io/badge/Download-Latest%20Release-CA5010?style=for-the-badge&logo=github&logoColor=white)](../../releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 
-A SharePoint Framework (SPFx) web part for project management with five views — Portfolio, Gantt chart, List, Kanban board, and Dashboard — all backed by SharePoint lists. Current release: **v1.5.1** (see the [Changelog](CHANGELOG.md)).
+A SharePoint Framework (SPFx) web part for project management with five views — Portfolio, Gantt chart, List, Kanban board, and Dashboard — all backed by SharePoint lists. Current release: **v1.6.0** (see the [Changelog](CHANGELOG.md)).
 
 ![SPFx](https://img.shields.io/badge/SPFx-1.20.0-0078D4?logo=microsoft&logoColor=white) ![Node](https://img.shields.io/badge/Node-18.x-339933?logo=nodedotjs&logoColor=white) ![React](https://img.shields.io/badge/React-17-61DAFB?logo=react&logoColor=black) ![TypeScript](https://img.shields.io/badge/TypeScript-4.7-3178C6?logo=typescript&logoColor=white) ![PnPjs](https://img.shields.io/badge/PnPjs-3.26-orange) ![pptxgenjs](https://img.shields.io/badge/pptxgenjs-4.0-blueviolet)
 
@@ -17,8 +17,8 @@ A SharePoint Framework (SPFx) web part for project management with five views �
 
 - **Portfolio View** — Cross-project overview showing all projects as summary cards with computed health indicators, progress bars, task counts, and a mini date-range timeline. Accessible from the project selector dropdown.
 - **Health Status** — Automatic "On Track / At Risk / Overdue" indicators computed from each task's dates and progress percentage — no manual entry required. Shown as badges in the List, Kanban, Gantt tooltip, and Portfolio views, with a "By Health" Gantt bar color option.
-- **Gantt Chart** — Custom SVG timeline with drag-to-move, drag-to-resize, drag-to-create, drag-to-link, keyboard move/resize, dependency arrows (FS / SS / FF / SF with lag), auto-shifting dependents with Undo, critical path highlight, baselines with variance, phase grouping, zoom levels (Day / Week / Month / Quarter) plus fit-to-project, and a today indicator
-- **List View** — Sortable, Excel-style grid with inline status and priority editing, bulk edit and bulk delete, CSV export, overdue highlighting, progress bars, and health badges
+- **Gantt Chart** — Custom SVG timeline with drag-to-move, drag-to-resize, drag-to-create, drag-to-link, drag-to-reorder tasks, keyboard move/resize, dependency arrows (FS / SS / FF / SF with lag), auto-shifting dependents with Undo, critical path highlight, baselines with variance, phase grouping, zoom levels (Day / Week / Month / Quarter) plus fit-to-project, and a today indicator
+- **List View** — Sortable, Excel-style grid with drag-to-reorder tasks, inline status and priority editing, bulk edit and bulk delete, CSV export, overdue highlighting, progress bars, and health badges
 - **Kanban Board** — Drag-and-drop cards across status columns (Not Started → In Progress → On Hold → Completed → Canceled), with health badges, WIP limits, and optional Phase or Assignee swimlanes
 - **Task Filter Bar** — Third toolbar row with text search, multi-select Status / Priority / Assignee / Phase filters, and a due-date filter (Overdue / Due Today / Due in 7 days). Active filters persist across view switches; a match count and one-click Clear keep filtering fast
 - **Project management** — Each project gets its own SharePoint list with 17 pre-built columns (status, priority, dates, assignee, % complete, phase, milestones, dependencies, baseline dates, and more)
@@ -67,6 +67,7 @@ A SharePoint Framework (SPFx) web part for project management with five views �
 - Drag a bar horizontally to move dates; drag the right edge to resize — works with mouse, touch, or pen input. A live date label follows the drag and the timeline auto-scrolls near the edges; **Esc** cancels
 - Moving a task automatically shifts its dependents, with an **Undo** button
 - Drag across an empty row to create a task; drag a bar's link handle onto another task to create a dependency
+- Drag a task's **⠿** handle in the left panel to reorder it within its phase or parent (Alt + Up / Down from the keyboard)
 - Keyboard: focus a bar, then Left/Right moves it one working day, Shift + Left/Right changes the end date, Enter opens it
 - Dependency arrows drawn between tasks; link types FS / SS / FF / SF with lag in working days
 - **Critical path** highlight and **baseline** bars with finish variance
@@ -90,7 +91,8 @@ A SharePoint Framework (SPFx) web part for project management with five views �
 
 ![List View](docs/screenshots/screenshot-list.png)
 
-- Click any column header to sort ascending/descending
+- Click any column header to sort ascending/descending (a third click returns to the manual order)
+- Drag a row's **⠿** handle to reorder tasks within a phase or parent — shown while no column sort is active
 - Change status or priority inline via dropdown — saves to SharePoint immediately
 - **Health** column shows an automatic On Track / At Risk / Overdue badge for each task
 - **Predecessors** column shows the names of tasks each row depends on
@@ -316,7 +318,7 @@ Upload `sharepoint/solution/sharepoint-smart-gantt-chart.sppkg` to your **ShareP
 
 ### Automated releases
 
-Pushing a version tag (e.g. `git tag v1.3.0 && git push origin v1.3.0`) triggers [`.github/workflows/release.yml`](.github/workflows/release.yml), which builds the `.sppkg` and attaches it to a GitHub Release automatically — no other CI runs on this repo (no build/test workflow on ordinary pushes or PRs).
+Pushing to `master` triggers [`.github/workflows/release.yml`](.github/workflows/release.yml). If the version in `package.json` has no GitHub Release yet, it builds the `.sppkg`, creates the `vX.Y.Z` tag, and publishes a Release using that version's [CHANGELOG](CHANGELOG.md) section — otherwise it does nothing. No other CI runs on this repo (no build/test workflow on ordinary pushes or PRs).
 
 ---
 
@@ -350,7 +352,7 @@ The web part creates and manages two types of lists on the current site:
 | Dependencies | Text | Comma-separated task IDs with optional link type and lag, e.g. `12,15SS+2` (a bare ID means Finish to Start, no lag) |
 | Notes | Note | Rich notes field |
 | TaskColor | Text | Hex color override (auto-colors by status if blank) |
-| SortOrder | Number | Display order |
+| SortOrder | Number | Display order (changed by dragging tasks in the Gantt or List view) |
 | BaselineStart | DateTime | Baseline start (added automatically to older lists when permitted) |
 | BaselineDue | DateTime | Baseline finish |
 
@@ -432,8 +434,9 @@ src/
     │   ├── mystrings.d.ts                # ISmartGanttWebPartStrings interface (all loc keys)
     │   └── en-us.js, de-de.js, ...        # One AMD strings module per locale (30 languages)
     ├── utils/
-    │   └── healthUtils.ts                # computeTaskHealth, computeProjectHealth,
-    │                                     # healthColor, healthLabel — pure functions, no React
+    │   ├── healthUtils.ts                # computeTaskHealth, computeProjectHealth,
+    │   │                                 # healthColor, healthLabel — pure functions, no React
+    │   └── reorderUtils.ts               # computeReorder, canReorderOnto — drag-to-reorder sortOrder math
     ├── services/
     │   ├── SharePointService.ts          # All SharePoint list operations (PnPjs);
     │                                     # includes getProjectTaskStats, getAllProjectStats

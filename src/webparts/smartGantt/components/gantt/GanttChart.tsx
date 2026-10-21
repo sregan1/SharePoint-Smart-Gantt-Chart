@@ -11,6 +11,7 @@ import {
 import { parseDateOnly, formatDateOnly, dateToDateOnlyString, todayLocalMidnight } from '../../utils/dateUtils';
 import { computeCriticalPath, isWorkingDay } from '../../utils/scheduleUtils';
 import { formatDependencyLink } from '../../utils/dependencyUtils';
+import { canReorderOnto } from '../../utils/reorderUtils';
 import * as strings from 'SmartGanttWebPartStrings';
 import { formatString } from '../localeUtils';
 import { GanttBar, IBarHandlers, BarDragMode } from './GanttBar';
@@ -45,7 +46,15 @@ interface IGanttChartProps {
   onCreateTaskAt?: (startDate: string, dueDate: string) => void;
   /** Drag from a bar's connector to another bar: predecessor → successor. */
   onAddDependency?: (predId: number, succId: number) => void;
+  /** The full, unfiltered task list. Drag-to-reorder is only offered when this
+   *  and onReorderTask are provided. */
+  allTasks?: ITask[];
+  /** Moves a task just before/after a sibling (same phase / same parent). */
+  onReorderTask?: (movedId: number, targetId: number, position: 'before' | 'after') => void;
 }
+
+/** Where a row being reordered would land: on the edge of `id`. */
+interface IReorderHint { id: number; position: 'before' | 'after' }
 
 type DragMode = BarDragMode | 'link' | 'create';
 
@@ -99,10 +108,18 @@ interface ILeftRowProps {
   onEditTask: (task: ITask) => void;
   onDeleteTask: (id: number) => void;
   onTogglePhase: (phase: string) => void;
+  /** Reorder handle shown (undefined = reordering not available). */
+  onReorderPointerDown?: (e: React.PointerEvent, taskId: number) => void;
+  onReorderKeyDown?: (e: React.KeyboardEvent, taskId: number) => void;
+  /** This row is the one being dragged. */
+  reordering?: boolean;
+  /** The dragged row would land just above/below this row. */
+  dropEdge?: 'before' | 'after' | null;
 }
 
 const LeftRowComponent: React.FC<ILeftRowProps> = ({
   row, rowH, color, violated, collapsed, onEditTask, onDeleteTask, onTogglePhase,
+  onReorderPointerDown, onReorderKeyDown, reordering, dropEdge,
 }) => {
   if (row.type === 'phase') {
     return (
@@ -126,7 +143,26 @@ const LeftRowComponent: React.FC<ILeftRowProps> = ({
   const task = row.task!;
   const dur = taskDuration(task);
   return (
-    <div className={styles.taskRow} style={{ height: rowH }}>
+    <div
+      className={[
+        styles.taskRow,
+        reordering ? styles.reorderingRow : '',
+        dropEdge === 'before' ? styles.dropBefore : dropEdge === 'after' ? styles.dropAfter : '',
+      ].join(' ').trim()}
+      style={{ height: rowH }}
+    >
+      {onReorderPointerDown && (
+        <button
+          type="button"
+          className={styles.reorderHandle}
+          title={strings.ListView_DragHandleTitle}
+          aria-label={formatString(strings.ListView_DragHandleAriaLabel, { taskTitle: task.title })}
+          onPointerDown={e => onReorderPointerDown(e, task.id)}
+          onKeyDown={e => onReorderKeyDown?.(e, task.id)}
+        >
+          ⠿
+        </button>
+      )}
       {row.depth ? <div className={styles.taskIndent} style={{ width: 16 * row.depth }} /> : null}
       <div className={styles.taskStatusDot} style={{ background: color }} />
       {task.isMilestone && <span className={styles.milestoneIcon}>◆</span>}
@@ -195,6 +231,8 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
   onImport,
   onCreateTaskAt,
   onAddDependency,
+  allTasks,
+  onReorderTask,
 }) => {
   const bodyScrollRef = React.useRef<HTMLDivElement>(null);
   const headerScrollRef = React.useRef<HTMLDivElement>(null);
@@ -1179,6 +1217,95 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
     return arrows;
   };
 
+  // ─── Drag-to-reorder (handle in the left panel) ────────────────────────
+  // Pointer events rather than native drag-and-drop so the list can
+  // auto-scroll while dragging: the rows are windowed, so the drop row is
+  // worked out from the pointer position, not from DOM hit-testing.
+
+  const reorderAvailable = !!onReorderTask && !!allTasks;
+  const [reorder, setReorder] = React.useState<{ id: number; hint: IReorderHint | null } | null>(null);
+  const reorderPointerY = React.useRef(0);
+  const reorderLatest = React.useRef({} as {
+    rows: IVisibleRow[]; allTasks?: ITask[]; rowH: number; onReorderTask?: IGanttChartProps['onReorderTask'];
+  });
+  reorderLatest.current = { rows: visibleTasks, allTasks, rowH: ROW_H, onReorderTask };
+
+  const handleReorderPointerDown = React.useCallback((e: React.PointerEvent, taskId: number): void => {
+    if (e.button !== 0) return;
+    e.preventDefault(); // no text selection / native drag while reordering
+    reorderPointerY.current = e.clientY;
+    setReorder({ id: taskId, hint: null });
+  }, []);
+
+  // Alt+Up / Alt+Down on a row's handle moves it past its neighboring sibling.
+  const handleReorderKeyDown = React.useCallback((e: React.KeyboardEvent, taskId: number): void => {
+    const L = reorderLatest.current;
+    if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') || !L.allTasks) return;
+    e.preventDefault();
+    const taskIds = L.rows.filter(r => r.type === 'task').map(r => r.task!.id);
+    const step = e.key === 'ArrowUp' ? -1 : 1;
+    for (let i = taskIds.indexOf(taskId) + step; i >= 0 && i < taskIds.length; i += step) {
+      if (canReorderOnto(L.allTasks, taskId, taskIds[i])) {
+        L.onReorderTask?.(taskId, taskIds[i], step < 0 ? 'before' : 'after');
+        return;
+      }
+    }
+  }, []);
+
+  const reorderingId = reorder ? reorder.id : null;
+  React.useEffect(() => {
+    if (reorderingId === null) return undefined;
+    const EDGE = 28;      // px from the panel's top/bottom where auto-scroll starts
+    const MAX_STEP = 18;  // px scrolled per frame at the very edge
+    let raf = 0;
+    let hint: IReorderHint | null = null;
+
+    const tick = (): void => {
+      const body = leftBodyRef.current;
+      const L = reorderLatest.current;
+      if (body && L.allTasks) {
+        const rect = body.getBoundingClientRect();
+        const y = reorderPointerY.current;
+        if (y < rect.top + EDGE) body.scrollTop -= Math.ceil(MAX_STEP * Math.min(1, (rect.top + EDGE - y) / EDGE));
+        else if (y > rect.bottom - EDGE) body.scrollTop += Math.ceil(MAX_STEP * Math.min(1, (y - (rect.bottom - EDGE)) / EDGE));
+
+        const rel = y - rect.top + body.scrollTop;
+        const idx = Math.floor(rel / L.rowH);
+        const row = L.rows[idx];
+        const next: IReorderHint | null = row && row.type === 'task' && canReorderOnto(L.allTasks, reorderingId, row.task!.id)
+          ? { id: row.task!.id, position: rel - idx * L.rowH < L.rowH / 2 ? 'before' : 'after' }
+          : null;
+        if ((next && next.id) !== (hint && hint.id) || (next && next.position) !== (hint && hint.position)) {
+          hint = next;
+          setReorder({ id: reorderingId, hint });
+        }
+      }
+      raf = requestAnimationFrame(tick);
+    };
+
+    const onMove = (e: PointerEvent): void => { reorderPointerY.current = e.clientY; };
+    const onUp = (): void => {
+      const done = hint;
+      setReorder(null);
+      if (done) reorderLatest.current.onReorderTask?.(reorderingId, done.id, done.position);
+    };
+    const onCancel = (): void => setReorder(null);
+    const onKey = (e: KeyboardEvent): void => { if (e.key === 'Escape') setReorder(null); };
+
+    raf = requestAnimationFrame(tick);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [reorderingId]);
+
   // ─── Left panel rows ───────────────────────────────────────────────────
 
   const renderLeftRows = (): React.ReactNode[] => {
@@ -1197,6 +1324,10 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
           onEditTask={onEditTask}
           onDeleteTask={onDeleteTask}
           onTogglePhase={togglePhase}
+          onReorderPointerDown={reorderAvailable ? handleReorderPointerDown : undefined}
+          onReorderKeyDown={reorderAvailable ? handleReorderKeyDown : undefined}
+          reordering={!!row.task && reorder?.id === row.task.id}
+          dropEdge={row.task && reorder?.hint?.id === row.task.id ? reorder.hint.position : null}
         />
       );
     }
@@ -1232,7 +1363,7 @@ export const GanttChart: React.FC<IGanttChartProps> = ({
   const nwPatternId = `${uid}-nw`;
 
   return (
-    <div className={`${styles.ganttWrapper} ${dragging ? styles.isDragging : ''}`}>
+    <div className={`${styles.ganttWrapper} ${dragging ? styles.isDragging : ''} ${reorder ? styles.isReordering : ''}`}>
       {/* Project title bar */}
       <div className={styles.ganttTitleBar} style={{ background: project.color }}>
         <div className={styles.ganttTitleDot} style={{ background: 'rgba(255,255,255,0.3)' }} />

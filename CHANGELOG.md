@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.6.0] - 2026-10-20
+
+### Added
+
+- **Drag to reorder tasks** — every task row in the Gantt chart's left panel and in the List view has a **⠿** handle. Drag it to change the task's position among the tasks in the same phase (or the sub-tasks of the same parent); a blue line shows where it will land. Dragging a parent moves its sub-tasks with it, and the new order is saved to the list's `SortOrder` column so it is the same in every view
+  - In the Gantt, the task list scrolls automatically when you drag near its top or bottom edge, and **Esc** cancels the drag
+  - **Alt + Up / Alt + Down** on a focused handle moves the task past its neighbor from the keyboard
+  - In the List view the handles appear while no column sort is active; with a column sorted, a note explains that you need to clear the sort first
+  - One **Undo** / **Redo** reverses or reapplies the whole move. Tasks hidden by a filter keep their relative order
+
+### Changed
+
+- **User Guide and README** — documented that a third click on a sorted List column header returns to the manual order (existing behavior), updated the Gantt and List screenshots, and corrected the README's description of the automated release workflow (it runs on every push to `master`, not on tags)
+
+---
+
 ## [1.5.1] - 2026-10-19
 
 ### Fixed

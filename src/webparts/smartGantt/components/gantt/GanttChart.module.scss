@@ -385,6 +385,64 @@
   * { cursor: grabbing !important; }
 }
 
+.isReordering {
+  cursor: grabbing;
+  user-select: none;
+
+  * { cursor: grabbing !important; }
+}
+
+.reorderHandle {
+  flex-shrink: 0;
+  width: 14px;
+  margin: 0 4px 0 -6px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: grab;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--neutralTertiary, #A19F9D);
+  touch-action: none;
+
+  &:hover, &:focus-visible { color: var(--neutralPrimary, #323130); }
+}
+
+.reorderingRow { opacity: 0.45; }
+
+// Drop indicator: a themed line on the edge the dragged task will land on.
+.dropBefore { box-shadow: inset 0 2px 0 var(--themePrimary, #0078D4); }
+.dropAfter { box-shadow: inset 0 -2px 0 var(--themePrimary, #0078D4); }
+
+.isReordering {
+  cursor: grabbing;
+  user-select: none;
+
+  * { cursor: grabbing !important; }
+}
+
+.reorderHandle {
+  flex-shrink: 0;
+  width: 14px;
+  margin: 0 4px 0 -6px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: grab;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--neutralTertiary, #A19F9D);
+  touch-action: none;
+
+  &:hover, &:focus-visible { color: var(--neutralPrimary, #323130); }
+}
+
+.reorderingRow { opacity: 0.45; }
+
+// Drop indicator: a themed line on the edge the dragged task will land on.
+.dropBefore { box-shadow: inset 0 2px 0 var(--themePrimary, #0078D4); }
+.dropAfter { box-shadow: inset 0 -2px 0 var(--themePrimary, #0078D4); }
+
 .dragLabel {
   position: fixed;
   display: none;

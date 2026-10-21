@@ -127,6 +127,9 @@ declare interface ISmartGanttWebPartStrings {
   ListView_EmptyTitle: string;
   ListView_AddFirstTask: string;
   ListView_AddTaskRow: string;
+  ListView_DragHandleTitle: string;
+  ListView_DragHandleAriaLabel: string;
+  ListView_ReorderNeedsManualSort: string;
   ListView_Unassigned: string;
   ListView_DependencyViolationTooltip: string;
   ListView_StatusAriaLabel: string;

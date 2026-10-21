@@ -10,6 +10,7 @@ import { computeTaskHealth, hasDependencyViolation } from '../../utils/healthUti
 import { formatDateOnly, parseDateOnly, toDateOnly } from '../../utils/dateUtils';
 import { isWorkingDay } from '../../utils/scheduleUtils';
 import { isOverdue, initials, stringToColor, getStatusLabel, getPriorityLabel } from '../../utils/taskDisplayUtils';
+import { canReorderOnto } from '../../utils/reorderUtils';
 import { exportTasksCsv } from '../../services/ExportService';
 import { HealthBadge } from '../common/HealthBadge';
 import styles from './ListView.module.scss';
@@ -21,6 +22,11 @@ interface IListViewProps {
   onEditTask: (task: ITask) => void;
   onDeleteTask: (id: number) => void;
   onTaskUpdate: (id: number, updates: Partial<ITask>) => void;
+  /** The full, unfiltered task list. Drag-to-reorder is only offered when this
+   *  and onReorderTask are provided. */
+  allTasks?: ITask[];
+  /** Moves a task just before/after a sibling (same phase / same parent). */
+  onReorderTask?: (movedId: number, targetId: number, position: 'before' | 'after') => void;
   onAddTask: () => void;
   /** Deletes several tasks at once (the caller owns confirmation). The bulk
    *  "Delete selected" action is only offered when this is provided. */
@@ -76,7 +82,8 @@ function statusForPercent(task: ITask, v: number): TaskStatus | undefined {
 }
 
 export const ListView: React.FC<IListViewProps> = ({
-  tasks, project, showHealthBadges = true, onEditTask, onDeleteTask, onTaskUpdate, onAddTask, onBulkDelete, calendar,
+  tasks, project, showHealthBadges = true, onEditTask, onDeleteTask, onTaskUpdate, allTasks, onReorderTask,
+  onAddTask, onBulkDelete, calendar,
 }) => {
   const [sortField, setSortField] = React.useState<SortField>('sortOrder');
   const [sortDir, setSortDir] = React.useState<SortDir>('asc');
@@ -263,6 +270,47 @@ export const ListView: React.FC<IListViewProps> = ({
     return rows;
   }, [tasks, sortField, sortDir]);
 
+  // ─── Drag-to-reorder ─────────────────────────────────────────────────────
+  // Only meaningful in the manual (sortOrder, ascending) order — in any other
+  // sort the rows aren't shown in the order that a drop would change.
+  const reorderAvailable = !!onReorderTask && !!allTasks;
+  const reorderEnabled = reorderAvailable && sortField === 'sortOrder' && sortDir === 'asc';
+  const [dragId, setDragId] = React.useState<number | null>(null);
+  const [dropHint, setDropHint] = React.useState<{ id: number; position: 'before' | 'after' } | null>(null);
+
+  const endDrag = (): void => { setDragId(null); setDropHint(null); };
+
+  const handleRowDragOver = (e: React.DragEvent<HTMLTableRowElement>, targetId: number): void => {
+    if (dragId === null || !allTasks || !canReorderOnto(allTasks, dragId, targetId)) return;
+    e.preventDefault(); // marks the row as a valid drop target
+    e.dataTransfer.dropEffect = 'move';
+    const rect = e.currentTarget.getBoundingClientRect();
+    const position = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+    setDropHint(prev => (prev && prev.id === targetId && prev.position === position ? prev : { id: targetId, position }));
+  };
+
+  const handleRowDrop = (e: React.DragEvent<HTMLTableRowElement>, targetId: number): void => {
+    if (dragId === null || !dropHint || dropHint.id !== targetId) return;
+    e.preventDefault();
+    onReorderTask?.(dragId, targetId, dropHint.position);
+    endDrag();
+  };
+
+  // Alt+Up / Alt+Down on a row's handle moves it past its neighboring sibling.
+  const handleHandleKeyDown = (e: React.KeyboardEvent, taskId: number): void => {
+    if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') || !allTasks) return;
+    e.preventDefault();
+    const taskRows = sortedTasks.filter(r => r.type === 'task').map(r => r.task!.id);
+    const from = taskRows.indexOf(taskId);
+    const step = e.key === 'ArrowUp' ? -1 : 1;
+    for (let i = from + step; i >= 0 && i < taskRows.length; i += step) {
+      if (canReorderOnto(allTasks, taskId, taskRows[i])) {
+        onReorderTask?.(taskId, taskRows[i], step < 0 ? 'before' : 'after');
+        return;
+      }
+    }
+  };
+
   if (tasks.length === 0) {
     return (
       <div className={styles.listView}>
@@ -350,12 +398,16 @@ export const ListView: React.FC<IListViewProps> = ({
           <button className={styles.toolbarBtn} onClick={() => exportTasksCsv(project, tasks)}>
             {strings.View_List_ExportCsv}
           </button>
+          {reorderAvailable && !reorderEnabled && (
+            <span className={styles.reorderHint}>{strings.ListView_ReorderNeedsManualSort}</span>
+          )}
         </div>
       )}
       <div className={styles.tableWrapper}>
         <table>
           <thead className={styles.thead}>
             <tr>
+              {reorderAvailable && <th className={styles.dragCol} aria-hidden="true" />}
               <th className={styles.checkCol} style={{ width: 36, cursor: 'default' }}>
                 <input
                   ref={selectAllRef}
@@ -383,7 +435,7 @@ export const ListView: React.FC<IListViewProps> = ({
               if (row.type === 'phase') {
                 return (
                   <tr key={`phase-${row.phase}`} className={styles.phaseGroupRow}>
-                    <td colSpan={showHealthBadges ? 12 : 11}>
+                    <td colSpan={(showHealthBadges ? 12 : 11) + (reorderAvailable ? 1 : 0)}>
                       <span className={styles.phaseGroupCell}>▸ {row.phase}</span>
                     </td>
                   </tr>
@@ -395,7 +447,42 @@ export const ListView: React.FC<IListViewProps> = ({
               const overdue = isOverdue(task);
 
               return (
-                <tr key={`task-${task.id}`} className={selected.has(task.id) ? styles.selectedRow : ''}>
+                <tr
+                  key={`task-${task.id}`}
+                  className={[
+                    selected.has(task.id) ? styles.selectedRow : '',
+                    dragId === task.id ? styles.draggingRow : '',
+                    dropHint && dropHint.id === task.id ? (dropHint.position === 'before' ? styles.dropBefore : styles.dropAfter) : '',
+                  ].join(' ').trim()}
+                  onDragOver={reorderEnabled ? e => handleRowDragOver(e, task.id) : undefined}
+                  onDrop={reorderEnabled ? e => handleRowDrop(e, task.id) : undefined}
+                >
+                  {/* Drag handle */}
+                  {reorderAvailable && (
+                    <td className={styles.dragCol}>
+                      {reorderEnabled && (
+                        <button
+                          type="button"
+                          className={styles.dragHandle}
+                          draggable
+                          title={strings.ListView_DragHandleTitle}
+                          aria-label={formatString(strings.ListView_DragHandleAriaLabel, { taskTitle: task.title })}
+                          onDragStart={e => {
+                            e.dataTransfer.effectAllowed = 'move';
+                            e.dataTransfer.setData('text/plain', String(task.id));
+                            const rowEl = e.currentTarget.closest('tr');
+                            if (rowEl) e.dataTransfer.setDragImage(rowEl, 0, 0);
+                            setDragId(task.id);
+                          }}
+                          onDragEnd={endDrag}
+                          onKeyDown={e => handleHandleKeyDown(e, task.id)}
+                        >
+                          ⠿
+                        </button>
+                      )}
+                    </td>
+                  )}
+
                   {/* Select */}
                   <td className={styles.checkCol}>
                     <input

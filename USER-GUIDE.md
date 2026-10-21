@@ -1,4 +1,4 @@
-# Smart Gantt Chart — User Guide · v1.5.1
+# Smart Gantt Chart — User Guide · v1.6.0
 
 ---
 
@@ -155,6 +155,7 @@ Working days follow the [working calendar](#11-display-settings) configured in t
 - **Move dates (Gantt view):** Drag a bar left or right to shift its dates. Tasks that depend on it shift too, and you can click **Undo**.
 - **Resize duration (Gantt view):** Drag the right edge of a bar to extend or shorten it.
 - **Create a task (Gantt view):** Drag across an empty row to create a task with those dates.
+- **Reorder tasks (Gantt and List views):** Drag a task's **⠿** handle up or down to change its position among the other tasks in the same phase or under the same parent.
 - **Change status (Kanban view):** Drag the card to a different column.
 - **Bulk edit (List view):** Tick several rows and set status, priority, % complete, or assignee for all of them at once.
 - **Undo / Redo:** Use the toolbar buttons or **Ctrl+Z** / **Ctrl+Y** to step back or forward through your last 50 changes.
@@ -268,6 +269,17 @@ The Gantt view is the heart of the web part. Switch to it using the **Gantt** bu
 - **Hover** over any bar to see a tooltip with full task details.
 - On a **touchscreen or with a pen**, the same drag and resize gestures work — touch and drag a bar to move it, or drag its right edge to resize.
 
+### Reordering tasks
+
+Every task row in the left panel has a **⠿** handle. Press and hold it, drag up or down, and release where you want the task — a blue line shows where it will land. The list scrolls automatically when you drag near its top or bottom edge, and **Esc** cancels the drag.
+
+- You can reorder tasks **within the same phase**, and sub-tasks **within the same parent**. Dropping a task anywhere else does nothing. To move a task to another phase or parent, change it in the task panel.
+- Dragging a parent task moves its sub-tasks with it.
+- **From the keyboard:** Tab to a task's handle, then press **Alt + Up** or **Alt + Down** to move it past the neighboring task.
+- The new order is saved to SharePoint and is the same in the Gantt and List views. Dates and dependencies are not changed — the dependency arrows simply follow the rows.
+- If a filter is active, tasks hidden by the filter keep their place.
+- One **Undo** reverses the whole move.
+
 ### Milestones
 
 A task with **Milestone** toggled on (Details tab of the task panel) renders as a ◆ diamond at its date instead of a bar. Hover it to see the same tooltip as any other task — title, date, status, priority, % complete, and health.
@@ -300,7 +312,15 @@ The List view shows all tasks in a spreadsheet-style grid. Switch to it using th
 
 ### Sorting
 
-Click any column header to sort by that column. Click again to reverse the order. An arrow (↑ ↓) shows which column is active.
+Click any column header to sort by that column. Click again to reverse the order, and a third time to return to the manual order. An arrow (↑ ↓) shows which column is active.
+
+### Reordering tasks
+
+In the manual order (no column sorted), each task row has a **⠿** handle at the left. Drag it up or down and drop it where you want the task — a blue line shows where it will land. **Alt + Up** / **Alt + Down** on a focused handle does the same from the keyboard.
+
+- You can reorder tasks within the same phase, and sub-tasks within the same parent. Dragging a parent moves its sub-tasks with it.
+- While a column sort is active the handles are hidden and a note reminds you to clear the sort first — the order you see isn't the manual order.
+- The new order is saved to SharePoint and is the same in the Gantt view. One **Undo** reverses the move.
 
 ### Inline editing
 
@@ -733,6 +753,7 @@ Each project is stored in its own SharePoint list, so tasks from different proje
 - **Kanban cards** — Tab to a card. Press **Enter** to open it in the task panel. Press the **Left** or **Right** arrow key to move it to the previous or next status column (the same status/progress rules as dragging apply — see [Kanban View](#7-kanban-view)).
 - **Toolbar menus** — The project selector and the **⋯** menus can be opened with Enter or Space once focused, and every item inside them is reachable with Tab and activated with Enter or Space.
 - **Gantt bars** — Tab to a bar, then press **Left** / **Right** to move it one working day, **Shift + Left** / **Shift + Right** to change its end date, or **Enter** to open the task. The new dates are announced to screen readers.
+- **Reordering tasks** — Tab to a task's **⠿** handle in the List or Gantt view, then press **Alt + Up** or **Alt + Down** to move the task past its neighbor.
 - **List view bulk selection** — every row checkbox, the select-all checkbox, and the bulk action bar are labeled and keyboard-operable.
 - **Kanban** — WIP limit fields and the **Add Task** button in each column have accessible labels; the Edit and Delete buttons on a card no longer also trigger the card's own Enter/arrow actions.
 - **People picker** — the suggestion list has an accessible label and the number of suggestions is announced to screen readers.

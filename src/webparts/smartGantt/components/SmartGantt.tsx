@@ -18,6 +18,7 @@ import {
 } from '../models';
 import { filterTasks } from '../utils/filterUtils';
 import { computeShifts, findDependencyCycle } from '../utils/scheduleUtils';
+import { computeReorder } from '../utils/reorderUtils';
 import { PortfolioView } from './views/PortfolioView';
 import { Toolbar } from './toolbar/Toolbar';
 import { GanttChart } from './gantt/GanttChart';
@@ -1010,10 +1011,13 @@ export default class SmartGantt extends React.Component<ISmartGanttProps, ISmart
     // view refetches instead of showing numbers from before this edit.
     this.setState(prev => {
       if (prev.selectedProject?.id !== projectId) return null;
-      return {
-        tasks: prev.tasks.map(t => (byId.has(t.id) ? { ...t, ...byId.get(t.id) } : t)),
-        portfolioStats: null,
-      };
+      const merged = prev.tasks.map(t => (byId.has(t.id) ? { ...t, ...byId.get(t.id) } : t));
+      // Views that draw rows in array order (Gantt) rely on the list being
+      // sorted, so a reorder (or its undo/redo) must re-sort it.
+      if (list.some(c => c.updates.sortOrder !== undefined)) {
+        merged.sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id);
+      }
+      return { tasks: merged, portfolioStats: null };
     });
 
     const failures: unknown[] = [];
@@ -1096,6 +1100,27 @@ export default class SmartGantt extends React.Component<ISmartGanttProps, ISmart
         true
       );
     }
+    await this._applyChanges(list);
+  };
+
+  /** Drag-to-reorder: moves a task next to a sibling as one undoable step. */
+  private _handleReorderTask = async (
+    movedId: number,
+    targetId: number,
+    position: 'before' | 'after'
+  ): Promise<void> => {
+    const { selectedProject, tasks } = this.state;
+    if (!selectedProject) return;
+    // Always computed from the full task list, not the filtered one a view
+    // shows, so tasks hidden by a filter keep their relative order.
+    const list = computeReorder(tasks, movedId, targetId, position);
+    if (list.length === 0) return;
+    const changes: IHistoryChange[] = list.map(c => ({
+      id: c.id,
+      before: { sortOrder: tasks.find(t => t.id === c.id)!.sortOrder },
+      after: c.updates,
+    }));
+    this._pushHistory({ projectId: selectedProject.id, changes });
     await this._applyChanges(list);
   };
 
@@ -1279,6 +1304,8 @@ export default class SmartGantt extends React.Component<ISmartGanttProps, ISmart
                   onEditTask={this._handleEditTask}
                   onDeleteTask={this._handleDeleteTask}
                   onTaskUpdate={this._handleTaskUpdate}
+                  allTasks={tasks}
+                  onReorderTask={this._handleReorderTask}
                   onAddTask={this._handleAddTask}
                   onImport={this._handleShowImportPanel}
                   onCreateTaskAt={this._handleCreateTaskAt}
@@ -1305,7 +1332,9 @@ export default class SmartGantt extends React.Component<ISmartGanttProps, ISmart
                   showHealthBadges={ganttSettings.showHealthBadges}
                   onEditTask={this._handleEditTask}
                   onDeleteTask={this._handleDeleteTask}
+                  allTasks={tasks}
                   onTaskUpdate={this._handleTaskUpdate}
+                  onReorderTask={this._handleReorderTask}
                   onAddTask={this._handleAddTask}
                   onBulkDelete={this._handleBulkDelete}
                   calendar={calendar}

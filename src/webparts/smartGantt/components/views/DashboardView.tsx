@@ -11,6 +11,7 @@ import { parseDateOnly, formatDateOnly, todayLocalMidnight, dateToDateOnlyString
 import { computeCriticalPath } from '../../utils/scheduleUtils';
 import { getStatusLabel, getPriorityLabel, getProjectStatusLabel, initials, stringToColor } from '../../utils/taskDisplayUtils';
 import { onActivate } from '../common/a11y';
+import { Linkify } from '../common/Linkify';
 import { THEME as T, SHARED_VIEW_CSS } from '../common/theme';
 
 interface IDashboardViewProps {
@@ -399,7 +400,7 @@ export const DashboardView: React.FC<IDashboardViewProps> = ({
         <div>
           <div style={{ fontSize: 20, fontWeight: 700, color: T.text, lineHeight: 1.2 }}>{project.title}</div>
           {project.description && (
-            <div style={{ fontSize: 12, color: T.textSecondary, marginTop: 2 }}>{project.description}</div>
+            <div style={{ fontSize: 12, color: T.textSecondary, marginTop: 2 }}><Linkify text={project.description} /></div>
           )}
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>

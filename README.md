@@ -5,7 +5,7 @@
 [![Download](https://img.shields.io/badge/Download-Latest%20Release-CA5010?style=for-the-badge&logo=github&logoColor=white)](../../releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 
-A SharePoint Framework (SPFx) web part for project management with five views — Portfolio, Gantt chart, List, Kanban board, and Dashboard — all backed by SharePoint lists. Current release: **v1.6.0** (see the [Changelog](CHANGELOG.md)).
+A SharePoint Framework (SPFx) web part for project management with five views — Portfolio, Gantt chart, List, Kanban board, and Dashboard — all backed by SharePoint lists. Current release: **v1.6.1** (see the [Changelog](CHANGELOG.md)).
 
 ![SPFx](https://img.shields.io/badge/SPFx-1.20.0-0078D4?logo=microsoft&logoColor=white) ![Node](https://img.shields.io/badge/Node-18.x-339933?logo=nodedotjs&logoColor=white) ![React](https://img.shields.io/badge/React-17-61DAFB?logo=react&logoColor=black) ![TypeScript](https://img.shields.io/badge/TypeScript-4.7-3178C6?logo=typescript&logoColor=white) ![PnPjs](https://img.shields.io/badge/PnPjs-3.26-orange) ![pptxgenjs](https://img.shields.io/badge/pptxgenjs-4.0-blueviolet)
 
@@ -318,7 +318,14 @@ Upload `sharepoint/solution/sharepoint-smart-gantt-chart.sppkg` to your **ShareP
 
 ### Automated releases
 
-Pushing to `master` triggers [`.github/workflows/release.yml`](.github/workflows/release.yml). If the version in `package.json` has no GitHub Release yet, it builds the `.sppkg`, creates the `vX.Y.Z` tag, and publishes a Release using that version's [CHANGELOG](CHANGELOG.md) section — otherwise it does nothing. No other CI runs on this repo (no build/test workflow on ordinary pushes or PRs).
+Pushing a `vX.Y.Z` tag triggers [`.github/workflows/release.yml`](.github/workflows/release.yml). It checks that the tag matches the version in `package.json`, builds the `.sppkg`, and publishes a Release using that version's [CHANGELOG](CHANGELOG.md) section. Pushing commits to `master` does not build or release anything, and no other CI runs on this repo (no build/test workflow on ordinary pushes or PRs).
+
+To release: bump the version in `package.json` and `config/package-solution.json`, add the CHANGELOG entry, commit and push, then tag and push the tag:
+
+```bash
+git tag v1.6.1
+git push origin v1.6.1
+```
 
 ---
 
@@ -514,6 +521,8 @@ All other configuration (projects, tasks, colors, display settings) is managed t
 
 **Display settings didn't stick after closing my browser** — Settings are saved to your browser's local storage, keyed to this specific web part on this specific page. Clearing browser data, using a private/incognito window, or viewing the page in a different browser will show the defaults instead of your saved settings.
 
+**A pasted link shows as `https&#58;//…` after I edit the task in the SharePoint list form** — SharePoint's rich-text editor encodes the text in multiline columns. The web part decodes it when it loads the task and shows clickable links. To stop the list form changing it, set **Use enhanced rich text** to **No** on the list's **Notes** and **TaskDescription** columns (new lists already use plain text).
+
 **Portfolio card shows "Stats unavailable"** — The web part couldn't load task statistics for that project, usually due to a permissions issue or a temporary network/throttling problem. Click **↻ Refresh** in the Portfolio header to retry; if it persists, confirm you still have access to that project's underlying SharePoint list.
 
 ---
@@ -548,6 +557,21 @@ All other configuration (projects, tasks, colors, display settings) is managed t
 
 ---
 
+## About
+
+Originally created and released in June 2026 by Sean Regan.
+
+Copyright (c) 2026 Vivity, Inc.
+
+Part of SharePoint Smart Solutions, a software product brand of Vivity, Inc.
+
+## Disclaimer
+
+This software is provided "as is", without warranty of any kind, under the terms of the MIT License. To the extent
+permitted by law, Vivity, Inc. and the authors are not liable for any loss or damage arising from its use. Review imported
+and edited task data before you rely on it. This project is not affiliated with or endorsed by Microsoft. SharePoint,
+Microsoft 365, Microsoft Planner and Microsoft Project are trademarks of Microsoft Corporation.
+
 ## License
 
-[MIT](LICENSE) © 2026 Sean Regan
+[MIT](LICENSE) © 2026 Vivity, Inc.

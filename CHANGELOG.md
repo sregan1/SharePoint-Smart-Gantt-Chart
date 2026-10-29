@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.6.1] - 2026-10-29
+
+### Added
+
+- **Clickable links in task Description and Notes** — `http://` and `https://` addresses in a task's Description or Notes now open in a new tab. A field that contains a link is shown as read-only text with the links highlighted; click it (or **Edit**) to change the text, and click away to return to the read-only view. Fields without a link remain normal text boxes. The project description on the Dashboard shows clickable links too
+
+### Fixed
+
+- **Pasted links changed after editing in the SharePoint list form** — SharePoint's rich-text editor re-encoded text (for example `https:` became `https&#58;`). The web part now decodes these HTML character references when it loads Description, Notes and the project description, so links display correctly and are saved back cleanly. New projects create these columns as plain text so the list form no longer rewrites them
+
+### Changed
+
+- **License and developer information** — the copyright holder is now Vivity, Inc. (LICENSE and README), the README gained About and Disclaimer sections, and the app-catalog developer name, website, privacy and terms URLs are set in the package
+- **Release workflow** — the GitHub release workflow now runs when a `vX.Y.Z` tag is pushed, not on every push to `master`; it fails if the tag doesn't match the `package.json` version
+
+---
+
 ## [1.6.0] - 2026-10-20
 
 ### Added

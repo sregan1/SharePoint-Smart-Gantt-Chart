@@ -1,4 +1,4 @@
-# Smart Gantt Chart — User Guide · v1.6.0
+# Smart Gantt Chart — User Guide · v1.6.1
 
 ---
 
@@ -102,7 +102,7 @@ Click **+ Add Task** in the toolbar. The task panel slides in from the right wit
 | Field | Notes |
 |---|---|
 | **Task Name** | Required. Keep it short — it's what appears on the Gantt bar. |
-| **Description** | Optional longer description. |
+| **Description** | Optional longer description. Web addresses (links) in it are clickable — see [Links in Description and Notes](#links-in-description-and-notes). |
 | **Start Date / Due Date** | Used to position and size the bar on the Gantt chart. |
 | **Status** | Not Started · In Progress · Completed · On Hold · Canceled |
 | **Priority** | Critical · High · Medium · Low |
@@ -118,7 +118,7 @@ Click **+ Add Task** in the toolbar. The task panel slides in from the right wit
 | **Phase** | Groups tasks into labeled sections on the Gantt. Start typing to see phases already used in this project — keeping spelling consistent is important for grouping to work correctly. Tasks in a phase automatically inherit the phase's color unless a custom color is set. |
 | **Milestone** | Toggle on for key deliverables. Milestones render as a ◆ diamond on the Gantt instead of a bar. |
 | **Custom Color** | Choose any color from the palette or click the rainbow swatch to open the full color picker. Leave blank (Auto) to use the phase color, or the color set in Display Settings. |
-| **Notes** | Free-text field for links, context, decisions, or meeting notes. |
+| **Notes** | Free-text field for links, context, decisions, or meeting notes. Web addresses (links) in it are clickable — see [Links in Description and Notes](#links-in-description-and-notes). |
 
 #### Links tab
 
@@ -142,6 +142,12 @@ Click **+ Add Task** in the toolbar. The task panel slides in from the right wit
 Lag is measured in working days; use a negative number for lead time. Links are stored in the task's `Dependencies` column in a compact form such as `12,15SS+2` (a plain ID means FS with no lag). A task can have roughly 60 dependencies.
 
 Working days follow the [working calendar](#11-display-settings) configured in the web part property pane.
+
+#### Links in Description and Notes
+
+Web addresses that start with `http://` or `https://` in a task's **Description** or **Notes** are clickable. When one of these fields contains a link, it is shown as read-only text with the links highlighted, and each link opens in a new browser tab. To change the text, click it or choose **Edit** above the field; click outside the field when you're done and it goes back to the read-only view. A field with no links in it is always a normal text box.
+
+If a pasted link looks garbled — for example `https&#58;//` instead of `https://` — it was changed by SharePoint's own list edit form, not by this web part, when the column is set to rich text. The web part shows these links correctly and saves them back cleanly the next time you save the task. To stop SharePoint changing them, open the list's settings, choose the **Notes** and **TaskDescription** columns, and set **Use enhanced rich text** to **No**. Lists created by this version are already set up this way.
 
 ### Editing a task
 

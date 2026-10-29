@@ -11,6 +11,7 @@ import * as strings from 'SmartGanttWebPartStrings';
 import { IDependencyLink, IProject, ITask, IProjectTaskStats, ProjectStatus, TaskPriority, TaskStatus } from '../models';
 import { computeTaskHealth, computeProjectHealth } from '../utils/healthUtils';
 import { toDateOnly } from '../utils/dateUtils';
+import { decodeHtmlEntities } from '../utils/textUtils';
 import { parseDependencies, serializeDependencies } from '../utils/dependencyUtils';
 import { withRetry, runLimited } from '../utils/retryUtils';
 import { formatString } from '../components/localeUtils';
@@ -119,7 +120,7 @@ export class SharePointService {
       await this.sp.web.lists.add(PROJECTS_LIST, 'Smart Gantt — project registry', 100, false);
       const list = this.sp.web.lists.getByTitle(PROJECTS_LIST);
       await list.fields.addText('ProjectListName', { MaxLength: 255 });
-      await list.fields.addMultilineText('ProjectDescription', { NumberOfLines: 4 });
+      await list.fields.addMultilineText('ProjectDescription', { NumberOfLines: 4, RichText: false });
       await list.fields.addText('ProjectColor', { MaxLength: 20 });
       await list.fields.addDateTime('ProjectStartDate');
       await list.fields.addDateTime('ProjectDueDate');
@@ -174,7 +175,7 @@ export class SharePointService {
         id: item.Id,
         title: item.Title,
         listName: item.ProjectListName || '',
-        description: item.ProjectDescription || '',
+        description: decodeHtmlEntities(item.ProjectDescription || ''),
         color: item.ProjectColor || '#0078D4',
         startDate: toDateOnly(item.ProjectStartDate),
         dueDate: toDateOnly(item.ProjectDueDate),
@@ -313,7 +314,7 @@ export class SharePointService {
       ): void => { pending.push({ name, promise, ...opts }); };
       const plainList = this.sp.web.lists.getByTitle(listName);
 
-      queue('TaskDescription', list.fields.addMultilineText('TaskDescription'));
+      queue('TaskDescription', list.fields.addMultilineText('TaskDescription', { RichText: false }));
       queue('StartDate', list.fields.addDateTime('StartDate'));
       queue('DueDate', list.fields.addDateTime('DueDate'));
       queue('Status', list.fields.addChoice('Status', {
@@ -334,7 +335,7 @@ export class SharePointService {
       queue('Dependencies', list.fields.addText('Dependencies', { MaxLength: Math.min(DEPENDENCIES_MAX_LENGTH, 255) }), {
         fallback: () => plainList.fields.addMultilineText('Dependencies'),
       });
-      queue('Notes', list.fields.addMultilineText('Notes'));
+      queue('Notes', list.fields.addMultilineText('Notes', { RichText: false }));
       queue('TaskColor', list.fields.addText('TaskColor', { MaxLength: 20 }));
       queue('SortOrder', list.fields.addNumber('SortOrder'));
       queue('IsMilestone', list.fields.add('IsMilestone', 8));
@@ -445,7 +446,7 @@ export class SharePointService {
         const task: ITask = {
           id: item.Id,
           title: item.Title,
-          description: item.TaskDescription || '',
+          description: decodeHtmlEntities(item.TaskDescription || ''),
           startDate: toDateOnly(item.StartDate),
           dueDate: toDateOnly(item.DueDate),
           status: (item.Status || 'Not Started') as TaskStatus,
@@ -456,7 +457,7 @@ export class SharePointService {
           parentTaskId: item.ParentTaskId || null,
           dependencies: parsed.ids,
           dependencyLinks: parsed.links,
-          notes: item.Notes || '',
+          notes: decodeHtmlEntities(item.Notes || ''),
           color: item.TaskColor || '',
           sortOrder: item.SortOrder || 0,
           isMilestone: item.IsMilestone === true || item.IsMilestone === 1,

@@ -1,12 +1,13 @@
 name: Release
 
-# Runs on every push to master. If a Release for the package.json version already exists
-# the run is a no-op; otherwise it builds and creates the vX.Y.Z tag + Release.
+# Runs when a version tag is pushed, so `git push origin vX.Y.Z` is the whole release
+# process. Pushing commits to the branch does not build or release anything.
+# Releasing: bump the version in package.json and config/package-solution.json, add the
+# CHANGELOG entry, commit and push, then tag that commit (`git tag vX.Y.Z`) and push the tag.
 on:
   push:
-    branches:
-      - master
-  workflow_dispatch:
+    tags:
+      - 'v*.*.*'
 
 permissions:
   contents: write
@@ -16,26 +17,22 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.ver.outputs.version }}
-      needed: ${{ steps.ver.outputs.needed }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Determine version and whether a release is needed
+      - name: Take the version from the tag and verify it matches package.json
         id: ver
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          if gh release view "v$VERSION" >/dev/null 2>&1; then
-            echo "needed=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "needed=true" >> "$GITHUB_OUTPUT"
+          VERSION="${GITHUB_REF_NAME#v}"
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if [ "$VERSION" != "$PKG_VERSION" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package.json version $PKG_VERSION" >&2
+            exit 1
           fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
   build-and-release:
     needs: check
-    if: needs.check.outputs.needed == 'true'
     runs-on: ubuntu-latest
     env:
       VERSION: ${{ needs.check.outputs.version }}
@@ -95,7 +92,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.check.outputs.version }}
-          target_commitish: ${{ github.sha }}
           name: v${{ needs.check.outputs.version }}
           files: ${{ steps.sppkg.outputs.path }}
           body_path: release-notes.md

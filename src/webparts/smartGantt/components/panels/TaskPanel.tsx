@@ -12,6 +12,7 @@ import {
 } from '../../models';
 import { AutocompleteField } from '../common/AutocompleteField';
 import { ColorSwatchPicker } from '../common/ColorSwatchPicker';
+import { LinkableTextField } from '../common/LinkableTextField';
 import {
   PeoplePicker, IPeopleSearchProvider, buildRecentPeople, isValidEmail,
 } from '../common/PeoplePicker';
@@ -401,13 +402,11 @@ export const TaskPanel: React.FC<ITaskPanelProps> = ({
                 placeholder={strings.TaskPanel_TaskNamePlaceholder}
               />
 
-              <TextField
+              <LinkableTextField
                 label={strings.TaskPanel_DescriptionLabel}
                 value={form.description || ''}
-                onChange={(_, v) => set('description', v || '')}
-                multiline
+                onChange={(v) => set('description', v)}
                 rows={2}
-                resizable={false}
                 placeholder={strings.TaskPanel_DescriptionPlaceholder}
               />
 
@@ -566,13 +565,11 @@ export const TaskPanel: React.FC<ITaskPanelProps> = ({
                 )}
               </div>
 
-              <TextField
+              <LinkableTextField
                 label={strings.TaskPanel_NotesLabel}
                 value={form.notes || ''}
-                onChange={(_, v) => set('notes', v || '')}
-                multiline
+                onChange={(v) => set('notes', v)}
                 rows={5}
-                resizable={false}
                 placeholder={strings.TaskPanel_NotesPlaceholder}
               />
             </Stack>
